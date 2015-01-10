@@ -76,6 +76,14 @@ func (this *panicWriter) fprintLn(fmtStr string, args ...interface{}) {
 	fmt.Fprint(this, "\n")
 }
 
+func (this *panicWriter) returnIf(ifClause, returnClause string) {
+	this.fprintLn("if %s {", ifClause)
+	this.indent()
+	this.fprintLn("return %s", returnClause)
+	this.deindent()
+	this.fprintLn("}")
+}
+
 func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	pw := &panicWriter{
 		Writer: w,
@@ -297,6 +305,40 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	pw.fprintLn("return nil")
 	pw.deindent()
 
+	pw.fprintLn("}")
+
+	//---
+
+	pw.fprintLn("")
+
+	pw.fprintLn("func LoadMany%s(rows %s.Rows) ([]%s,error) {",
+		modelName,
+		sillyquil_runtime_pkg_name,
+		singluarModelName,
+	)
+	pw.indent()
+	pw.fprintLn("columnNames, err := rows.Columns()")
+	pw.returnIf("err != nil", "nil,err")
+
+	pw.fprintLn("columns, err := %s(columnNames)", columnAnalyzerFunctionName)
+	pw.returnIf("err != nil", "nil,err")
+	pw.fprintLn("var result []%s", singluarModelName)
+	pw.fprintLn("for rows.Next() {")
+	pw.indent()
+	pw.fprintLn("var m %s", singluarModelName)
+	pw.fprintLn("err = (&m).loadWithColumns(columns,rows)")
+	pw.fprintLn("if err != nil {")
+	pw.indent()
+	pw.fprintLn("rows.Close()")
+	pw.fprintLn("return nil,err")
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.fprintLn("result = append(result,m)")
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.returnIf("rows.Err() != nil", "nil,rows.Err()")
+	pw.fprintLn("return result,nil")
+	pw.deindent()
 	pw.fprintLn("}")
 
 	return nil

@@ -204,7 +204,7 @@ func main() {
 		me := NewModelEmitter()
 		me.Package = "dal"
 
-		if table.Name() == "torrents" {
+		if table.Name() == "examples" {
 			err = me.Emit(table, os.Stdout)
 			if err != nil {
 				spicelog.Fatalf("err:%v", err)
