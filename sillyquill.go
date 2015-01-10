@@ -6,6 +6,7 @@ import _ "github.com/lib/pq"
 import "database/sql"
 import "fmt"
 import "strings"
+import "os"
 
 type Table interface {
 	Name() string
@@ -93,7 +94,7 @@ func (this *InformationSchemaTable) Name() string {
 
 func (this *InformationSchemaTable) Columns() ([]Column, error) {
 	const query = `Select column_name,data_type,is_nullable from 
-	information_schema.columns 
+	information_schema.columns  
 	where 
 		table_name = $1
 	and 
@@ -105,6 +106,7 @@ func (this *InformationSchemaTable) Columns() ([]Column, error) {
 	}
 
 	var result []Column
+
 	for rows.Next() {
 		var column_name string
 		var data_type string
@@ -143,7 +145,7 @@ func (this *InformationSchemaTable) Columns() ([]Column, error) {
 	if rows.Err() != nil {
 		return nil, rows.Err()
 	}
-	return nil, nil
+	return result, nil
 }
 
 func (this *InformationSchemaAdapter) Tables() ([]Table, error) {
@@ -196,41 +198,21 @@ func main() {
 	}
 
 	for _, table := range tables {
-		spicelog.Infof("Table %q", table.Name())
-		columns, err := table.Columns()
-		if err != nil {
-			spicelog.Errorf("%v", err)
-		}
+		var err error
 
-		for _, column := range columns {
-			spicelog.Infof("Table %q - column %q", table.Name(), column.Name())
-		}
-	}
+		//spicelog.Infof("Table %q", table.Name())
+		me := NewModelEmitter()
+		me.Package = "dal"
 
-	/**
-	for rows.Next() {
-		var table_name string
-		err := rows.Scan(&table_name)
-		if err != nil {
-			spicelog.Fatalf("%v", err)
-		}
-		spicelog.Infof("Table:%v", table_name)
-
-		columns_for, err := db.Query("Select column_name,data_type from information_schema.columns where table_schema='public' and table_name=$1", table_name)
-		if err != nil {
-			spicelog.Fatalf("%v", err)
-		}
-
-		for columns_for.Next() {
-			var column_name string
-			var data_type string
-			err = columns_for.Scan(&column_name, &data_type)
+		if table.Name() == "torrents" {
+			err = me.Emit(table, os.Stdout)
 			if err != nil {
-				spicelog.Fatalf("%v", err)
+				spicelog.Fatalf("err:%v", err)
 			}
-			spicelog.Infof("Table %q column %q - %q", table_name, column_name, data_type)
 		}
-	}**/
+		os.Stdout.Sync()
+
+	}
 
 	spicelog.Stop()
 }
