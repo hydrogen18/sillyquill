@@ -1,126 +1,236 @@
 package main
 
-import "go/parser"
-import "go/token"
-import "os"
+import "flag"
+import "github.com/spiceworks/spicelog"
+import _ "github.com/lib/pq"
+import "database/sql"
 import "fmt"
-import "go/ast"
+import "strings"
 
-type Table struct {
-	Name    string
-	Columns []*Column
+type Table interface {
+	Name() string
+	Columns() ([]Column, error)
 }
 
-type SqlType struct {
-	Name string
+type SqlDataType int
+
+const sqlUnknown = SqlDataType(0)
+const SqlInt = SqlDataType(1)
+const SqlBigInt = SqlDataType(2)
+const SqlByteArray = SqlDataType(3)
+const SqlVarChar = SqlDataType(4)
+const SqlBoolean = SqlDataType(5)
+const SqlTimestamp = SqlDataType(6)
+
+type ErrNoSuchDataType string
+
+func (this ErrNoSuchDataType) Error() string {
+	return fmt.Sprintf("No match for datatype %q", string(this))
 }
 
-var SqlInt = &SqlType{"integer"}
-var SqlSmallInt = &SqlType{"smallint"}
-var SqlBigInt = &SqlType{"bigint"}
+func StringToSqlDataType(v string) (SqlDataType, error) {
 
-var SqlReal = &SqlType{"real"}
-var SqlDouble = &SqlType{"double"}
+	dataType := strings.Trim(strings.ToUpper(v), " ")
 
-var SqlSerial = &SqlType{"serial"}
+	switch dataType {
+	case "INT", "INTEGER":
+		return SqlInt, nil
+	case "BIGINT":
+		return SqlBigInt, nil
+	case "BOOLEAN":
+		return SqlBoolean, nil
+	case "CHARACTER VARYING":
+		return SqlVarChar, nil
+	case "BYTEA":
+		return SqlByteArray, nil
 
-var SqlBool = &SqlType{"bool"}
-
-var SqlString = &SqlType{"text"}
-
-type Column struct {
-	Type *SqlType
-	Name string
-}
-
-func TableName(t *ast.TypeSpec) string {
-	return t.Name.String()
-}
-
-func ColumnName(f *ast.Field) string {
-	return f.Names[0].String()
-}
-
-func ColumnType(identity *ast.Ident) *SqlType {
-	//Check for identity.Obj != nil
-	switch identity.Name {
-	case "uint":
-		return SqlInt
-	case "bool":
-		return SqlBool
-	case "float32":
-		return SqlReal
-	case "string":
-		return SqlString
 	}
 
-	panic(identity)
+	if strings.HasPrefix(dataType, "TIMESTAMP") {
+		return SqlTimestamp, nil
+	}
+
+	return sqlUnknown, ErrNoSuchDataType(v)
 }
 
-type SQLizer interface {
-	ToTableName(t *ast.TypeSpec) string
-	ToColumnName(t *ast.TypeSpec) string
-	ColumnType(identity *ast.Ident) *SqlType
+type Column interface {
+	DataType() SqlDataType
+	Name() string
+	Nullable() bool
 }
 
-func Analyze(filename string, sqlizer SQLizer) ([]*Table, error) {
-	var tables []*Table
-	return tables, nil
+type InformationSchemaAdapter struct {
+	TableSchema string
+	db          *sql.DB
+}
+
+type InformationSchemaColumn struct {
+	name     string
+	dataType SqlDataType
+	nullable bool
+}
+
+func (this *InformationSchemaColumn) Name() string {
+	return this.name
+}
+
+func (this *InformationSchemaColumn) DataType() SqlDataType {
+	return this.dataType
+}
+
+func (this *InformationSchemaColumn) Nullable() bool {
+	return this.nullable
+}
+
+type InformationSchemaTable struct {
+	name   string
+	parent *InformationSchemaAdapter
+}
+
+func (this *InformationSchemaTable) Name() string {
+	return this.name
+}
+
+func (this *InformationSchemaTable) Columns() ([]Column, error) {
+	const query = `Select column_name,data_type,is_nullable from 
+	information_schema.columns 
+	where 
+		table_name = $1
+	and 
+		table_schema = $2`
+
+	rows, err := this.parent.db.Query(query, this.name, this.parent.TableSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []Column
+	for rows.Next() {
+		var column_name string
+		var data_type string
+		var is_nullable string
+		err := rows.Scan(&column_name, &data_type, &is_nullable)
+		if err != nil {
+			return nil, err
+		}
+
+		sdt, err := StringToSqlDataType(data_type)
+		if err != nil {
+			return nil, err
+		}
+
+		var isNullable bool
+		switch is_nullable {
+		case "NO":
+			isNullable = false
+		case "YES":
+			isNullable = true
+		default:
+			return nil, fmt.Errorf("Bad value for is_nullable table %q column %q:%v",
+				this.name,
+				column_name,
+				is_nullable)
+		}
+
+		result = append(result,
+			&InformationSchemaColumn{
+				nullable: isNullable,
+				dataType: sdt,
+				name:     column_name,
+			})
+	}
+
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return nil, nil
+}
+
+func (this *InformationSchemaAdapter) Tables() ([]Table, error) {
+	const query = "Select table_name from information_schema.tables where table_schema=$1"
+
+	rows, err := this.db.Query(query, this.TableSchema)
+	if err != nil {
+		return nil, err
+	}
+	var results []Table
+	for rows.Next() {
+		var table_name string
+		err = rows.Scan(&table_name)
+		if err != nil {
+			return nil, err
+		}
+
+		results = append(results,
+			&InformationSchemaTable{
+				name:   table_name,
+				parent: this,
+			})
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+
+	return results, nil
 }
 
 func main() {
-	fset := token.NewFileSet()
-	parsed, err := parser.ParseFile(fset, os.Args[1], nil, 0)
+	flag.Parse()
+	const dbconfig = "dbname=ericu sslmode=disable"
+
+	db, err := sql.Open("postgres", dbconfig)
+
 	if err != nil {
-		panic(err)
+		spicelog.Fatalf("%v", err)
+	}
+	defer db.Close()
+
+	adapter := &InformationSchemaAdapter{
+		db:          db,
+		TableSchema: "public",
 	}
 
-	fmt.Printf("%v\n", parsed)
+	tables, err := adapter.Tables()
+	if err != nil {
+		spicelog.Fatalf("%v", err)
+	}
 
-	var tables []*Table
+	for _, table := range tables {
+		spicelog.Infof("Table %q", table.Name())
+		columns, err := table.Columns()
+		if err != nil {
+			spicelog.Errorf("%v", err)
+		}
 
-	for i, d := range parsed.Decls {
-		fmt.Printf("Decls[%d](%T) = %v\n", i, d, d)
+		for _, column := range columns {
+			spicelog.Infof("Table %q - column %q", table.Name(), column.Name())
+		}
+	}
 
-		switch d := d.(type) {
-		case *ast.GenDecl:
-			fmt.Printf("\t%v\n", d.Tok)
-			for j, s := range d.Specs {
+	/**
+	for rows.Next() {
+		var table_name string
+		err := rows.Scan(&table_name)
+		if err != nil {
+			spicelog.Fatalf("%v", err)
+		}
+		spicelog.Infof("Table:%v", table_name)
 
-				s := s.(*ast.TypeSpec)
-				fmt.Printf("\tSpecs[%d] = %v\n", j, s)
-				fmt.Printf("\t\t%v\n", s.Name)
+		columns_for, err := db.Query("Select column_name,data_type from information_schema.columns where table_schema='public' and table_name=$1", table_name)
+		if err != nil {
+			spicelog.Fatalf("%v", err)
+		}
 
-				table := &Table{Name: TableName(s)}
-
-				fmt.Printf("\t\t(%T)%v\n", s.Type, s.Type)
-				st := s.Type.(*ast.StructType)
-				for k, f := range st.Fields.List {
-					column := &Column{Name: ColumnName(f)}
-					fmt.Printf("\t\t\tFields[%d](%T) = %v\n", k, f, f)
-					typeId := f.Type.(*ast.Ident)
-					fmt.Printf("\t\t\tFields[%d].Type(%T) = %v\n", k, typeId, typeId.Name)
-					fmt.Printf("\t\t\tFields[%d].Type.Obj = %v\n", k, typeId.Obj)
-
-					if f.Tag != nil {
-						fmt.Printf("\t\t\tFields[%d].Tag = %v\n", k, f.Tag)
-						continue //TODO check tag contents
-					}
-
-					column.Type = ColumnType(typeId)
-
-					table.Columns = append(table.Columns, column)
-				}
-				tables = append(tables, table)
+		for columns_for.Next() {
+			var column_name string
+			var data_type string
+			err = columns_for.Scan(&column_name, &data_type)
+			if err != nil {
+				spicelog.Fatalf("%v", err)
 			}
+			spicelog.Infof("Table %q column %q - %q", table_name, column_name, data_type)
 		}
-	}
+	}**/
 
-	for i, table := range tables {
-		fmt.Printf("table[%d] = %v\n", i, table.Name)
-		for k, column := range table.Columns {
-			fmt.Printf("\tcolumn[%d](%v) = %v\n", k, column.Type.Name, column.Name)
-		}
-	}
-
+	spicelog.Stop()
 }
