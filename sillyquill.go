@@ -261,8 +261,8 @@ func (this *InformationSchemaAdapter) Tables() ([]Table, error) {
 
 func main() {
 	flag.Parse()
-	const dbconfig = "user=skypal password=ismypal dbname=ccm_development sslmode=disable host=10.192.4.57"
-
+	//const dbconfig = "user=skypal password=ismypal dbname=ccm_development sslmode=disable host=10.192.4.57"
+	const dbconfig = "dbname=ericu sslmode=disable host=localhost"
 	db, err := sql.Open("postgres", dbconfig)
 	db.SetMaxOpenConns(16)
 	if err != nil {
@@ -298,36 +298,28 @@ func main() {
 
 	wg := new(sync.WaitGroup)
 	for _, table := range tables {
-		var err error
 
 		spicelog.Infof("Table %q", table.Name())
 		if _, ok := exclude_tables[table.Name()]; ok {
 			continue
 		}
-		uniques, err := table.Unique()
-		if err != nil {
-			spicelog.Fatalf("err:%v", err)
-		}
-		for _, u := range uniques {
-			spicelog.Infof("unique %q", u)
-		}
 
 		wg.Add(1)
-		go func() {
+		go func(t Table) {
 			defer wg.Done()
 
 			me := NewModelEmitter()
 			me.Package = "dal"
 
 			fout, err := os.OpenFile(fmt.Sprintf("/home/ericu/sillyquill/src/dummy/dal/%s.go",
-				table.Name()),
+				t.Name()),
 				os.O_TRUNC|os.O_WRONLY|os.O_CREATE,
 				0640)
 			if err != nil {
 				spicelog.Errorf("err:%v", err)
 			}
 
-			err = me.Emit(table, fout)
+			err = me.Emit(t, fout)
 			if err != nil {
 				spicelog.Errorf("Error:%v", err)
 			}
@@ -336,7 +328,7 @@ func main() {
 			if err != nil {
 				spicelog.Fatalf("err:%v", err)
 			}
-		}()
+		}(table)
 
 	}
 	wg.Wait()

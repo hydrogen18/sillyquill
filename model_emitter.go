@@ -122,7 +122,66 @@ func (pw *panicWriter) printDataType(dt []interface{}) error {
 
 }
 
+func tempModelNamer(v string) (string, string) {
+	pluralName := UnderscoresToCamelCase(v)
+
+	singularName := pluralName[0 : len(pluralName)-1]
+
+	return pluralName, singularName
+}
+
 func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
+	pw := &panicWriter{
+		Writer: w,
+		level:  0,
+		tab:    this.Tab,
+	}
+	var emitters []CodeEmitter
+	columnizedStruct, err := NewColumnizedStruct(table,
+		tempModelNamer,
+		this.ColumnNameToCodeName,
+		this.ColumnToDataType)
+
+	if err != nil {
+		return err
+	}
+	emitters = append(emitters, columnizedStruct)
+
+	columnType := NewColumnType(columnizedStruct)
+
+	emitters = append(emitters, columnType)
+
+	columnLoader := NewColumnLoaderFor(columnizedStruct,
+		columnType)
+
+	emitters = append(emitters, columnLoader)
+
+	pw.fprintLn("package %s", this.Package)
+
+	imports := make(map[string]int)
+
+	for _, emitter := range emitters {
+		emitterImports := emitter.Imports()
+		for _, v := range emitterImports {
+			imports[v] = 0
+		}
+	}
+	pw.fprintLn("")
+
+	for v, _ := range imports {
+		pw.fprintLn("import %q", v)
+	}
+	pw.fprintLn("")
+
+	for _, emitter := range emitters {
+		err := emitter.Emit(pw)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+
 	uniqueColumns, err := table.Unique()
 	if err != nil {
 		return err
@@ -137,11 +196,6 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 
 	isIdentifiable = isIdentifiable || len(primaryKeyColumns) != 0
 
-	pw := &panicWriter{
-		Writer: w,
-		level:  0,
-		tab:    this.Tab,
-	}
 	pw.fprintLn("package %s", this.Package)
 	pw.fprintLn("")
 	pw.fprintLn(`import "database/sql"`)
