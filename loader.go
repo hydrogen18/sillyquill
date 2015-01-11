@@ -2,10 +2,6 @@ package main
 
 import "fmt"
 
-/*
-
-*/
-
 type ColumnLoader struct {
 	ColumnAnalyzerFunctionName  string
 	LoadManyFunctionName        string
@@ -127,6 +123,30 @@ func (this *ColumnLoader) Emit(pw *panicWriter) error {
 	pw.fprintLn("}")
 	pw.returnIf("rows.Err() != nil", "nil, rows.Err()")
 	pw.fprintLn("return result, nil")
+	pw.deindent()
+	pw.fprintLn("}")
+
+	//--Emit a receiver that loads a list of columns
+	//based on another set of columns in the instance
+	pw.fprintLn("func (this *%s) loadColumnsWhere(db *sql.DB, where %s,columns ...%s) error {",
+		this.TheColumnizedStruct.SingularModelName,
+		this.TheColumnType.ListTypeName,
+		this.TheColumnType.InterfaceName)
+
+	pw.indent()
+	pw.fprintLn("var buf bytes.Buffer")
+	pw.fprintLn(`(&buf).WriteString("Select ")`)
+	pw.fprintLn("for _, column := range columns {")
+	pw.indent()
+	pw.fprintLn(`fmt.Fprintf(&buf,"%%q,",column.Name())`)
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.fprintLn("(&buf).Truncate((&buf).Len() - 1)")
+	pw.fprintLn("(&buf).WriteString(` from %q where `)", this.TheColumnizedStruct.TableName)
+	pw.fprintLn("(&buf).WriteString(where.andEqualClauseOf(1))")
+
+	pw.fprintLn("row := db.QueryRow(buf.String(),where.ValuesOf(this)...)")
+	pw.fprintLn("return this.loadWithColumns(columns,row)")
 	pw.deindent()
 	pw.fprintLn("}")
 

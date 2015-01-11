@@ -24,6 +24,11 @@ type ColumnizedStruct struct {
 	ListTypeName      string
 	Fields            []ColumnizedField
 	Columns           []Column
+	PrimaryKey        []ColumnizedField
+	Unique            []ColumnizedField
+	TableName         string
+
+	TheColumnType *ColumnType
 }
 
 func NewColumnizedStruct(t Table,
@@ -31,6 +36,7 @@ func NewColumnizedStruct(t Table,
 	columnNameToFieldName func(string) string,
 	columnnToDataType func(Column) []interface{}) (*ColumnizedStruct, error) {
 	this := new(ColumnizedStruct)
+	this.TableName = t.Name()
 
 	this.PluralModelName, this.SingularModelName = tableNameToStructNames(t.Name())
 	this.ListTypeName = fmt.Sprintf("%sList", this.SingularModelName)
@@ -44,8 +50,28 @@ func NewColumnizedStruct(t Table,
 	if err != nil {
 		return nil, err
 	}
+
+	primaryKey, err := t.PrimaryKey()
+	if err != nil {
+		return nil, err
+	}
+	primaryKeys := make(map[string]int)
+	for _, v := range primaryKey {
+		primaryKeys[v] = 0
+	}
+
+	unique, err := t.Unique()
+	if err != nil {
+		return nil, err
+	}
+	uniques := make(map[string]int)
+	for _, v := range unique {
+		uniques[v] = 0
+	}
+
 	for _, column := range this.Columns {
 		field := ColumnizedField{}
+
 		field.Name = columnNameToFieldName(column.Name())
 		field.DataTypeDefn = columnToDataType(column)
 
@@ -59,6 +85,17 @@ func NewColumnizedStruct(t Table,
 			t.Name(),
 			column.Name(),
 			field.Name)
+
+		_, ok := uniques[column.Name()]
+		if ok {
+			this.Unique = append(this.Unique, field)
+		}
+
+		_, ok = primaryKeys[column.Name()]
+		if ok {
+			this.PrimaryKey = append(this.PrimaryKey, field)
+		}
+
 	}
 
 	return this, nil
@@ -108,6 +145,7 @@ func (this *ColumnizedStruct) Imports() []string {
 	var result []string
 	result = append(result, "bytes")
 	result = append(result, "fmt")
+	result = append(result, "database/sql")
 	for _, field := range this.Fields {
 		var i int
 		kind, ok := field.DataTypeDefn[i].(reflect.Kind)
@@ -210,6 +248,34 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.deindent()
 	pw.fprintLn("}")
 
+	//--Emit an accessor for field of the struct
+	for i, field := range this.Fields {
+		pw.fprintLn("func (this *%s) Get%s(db *sql.DB) (%s, error) {",
+			this.SingularModelName,
+			field.Name,
+			field.DataType)
+		pw.indent()
+		pw.fprintLn("if this.IsLoaded.%s {", field.Name)
+		pw.indent()
+		pw.fprintLn("return this.%s, nil", field.Name)
+		pw.deindent()
+		pw.fprintLn("}")
+
+		pw.fprintLn("columns, err := this.identifyingColumns()")
+		pw.fprintLn("if err != nil {")
+		pw.indent()
+		pw.fprintLn("return this.%s, err", field.Name)
+		pw.deindent()
+		pw.fprintLn("}")
+
+		pw.fprintLn("return this.%s, this.loadColumnsWhere(db,columns,%s)",
+			field.Name,
+			this.TheColumnType.Defns[i].InstanceName)
+		pw.deindent()
+		pw.fprintLn("}")
+		pw.fprintLn("")
+	}
+
 	return nil
 }
 
@@ -267,11 +333,21 @@ func (this *ColumnType) Imports() []string {
 	return nil
 }
 
+func (this *ColumnType) ColumnTypeInstanceByFieldName(fieldName string) string {
+	for _, defn := range this.Defns {
+		if defn.FieldName == fieldName {
+			return defn.InstanceName
+		}
+	}
+	panic(fieldName)
+}
+
 func (this *ColumnType) Emit(pw *panicWriter) error {
 	//--Emit type definition for column interface type
 	pw.fprintLn("type %s interface { ",
 		this.InterfaceName)
 	pw.indent()
+	pw.fprintLn(" Name() string")
 	pw.fprintLn(" PointerTo(m *%s) interface{}",
 		this.Parent.SingularModelName)
 	pw.fprintLn(" ValueOf(m *%s) interface{}",
@@ -299,7 +375,7 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 	pw.fprintLn("return result")
 	pw.deindent()
 	pw.fprintLn("}")
-	//--Emit function to call setLoaded on each element
+	//--Emit function to call SetLoaded on each element
 	pw.fprintLn("func(this %s) SetLoaded(m *%s,isLoaded bool)  {",
 		this.ListTypeName,
 		this.Parent.SingularModelName,
@@ -316,11 +392,60 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 	pw.fprintLn("}")
 	pw.fprintLn("")
 
+	//--Emit function to call ValueOf on each element
+	pw.fprintLn("func(this %s) ValuesOf(m *%s) []interface{} {",
+		this.ListTypeName,
+		this.Parent.SingularModelName,
+	)
+	pw.indent()
+	pw.fprintLn("result := make([]interface{},len(this))")
+	pw.fprintLn("for i, v := range this {")
+	pw.indent()
+	pw.fprintLn("result[i] = v.ValueOf(m)")
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.fprintLn("return result")
+	pw.deindent()
+	pw.fprintLn("}")
+
+	//--Emit function to return an and clause representing each column
+	pw.fprintLn("func(this %s) andEqualClauseOf(parameterIndex int) string {",
+		this.ListTypeName,
+	)
+	pw.indent()
+	pw.fprintLn("var buf bytes.Buffer")
+	pw.fprintLn("for i, v := range this {")
+	pw.indent()
+	pw.fprintLn(`fmt.Fprintf(&buf,"%%q",v.Name())`)
+	pw.fprintLn(`(&buf).WriteRune('=')`)
+	pw.fprintLn(`fmt.Fprintf(&buf,"$%%d", i + parameterIndex)`)
+	pw.fprintLn("")
+	pw.fprintLn("if i != len(this) - 1 {")
+	pw.indent()
+	pw.fprintLn(`(&buf).WriteString(" and ")`)
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.fprintLn("return buf.String()")
+	pw.deindent()
+	pw.fprintLn("}")
+
 	for _, defn := range this.Defns {
 		//--Emit type definition for each column. The value is meaningless
 		pw.fprintLn("type %s int", defn.TypeName)
 		//--Emit instantiation of a singleton of each column type
 		pw.fprintLn("var %s = new(%s)", defn.InstanceName, defn.TypeName)
+		//--
+		pw.fprintLn("func (%s) Name() string {",
+			defn.TypeName,
+		)
+		pw.indent()
+		pw.fprintLn("return %q", defn.ColumnName)
+		pw.deindent()
+		pw.fprintLn("}")
+		//---
+
 		pw.fprintLn("func (%s) PointerTo(m *%s) interface{} {",
 			defn.TypeName,
 			this.Parent.SingularModelName)
@@ -358,5 +483,51 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 
 		pw.fprintLn("")
 	}
+
+	//--Emit a receiver that returns the minimum set of identifying columns
+	//for the type
+	pw.fprintLn("func (this %s) identifyingColumns() (%s, error) {",
+		this.Parent.SingularModelName,
+		this.ListTypeName,
+	)
+
+	pw.indent()
+	for _, u := range this.Parent.Unique {
+		pw.fprintLn("if this.IsLoaded.%s {",
+			u.Name)
+		pw.indent()
+		pw.fprintLn("return %s{%s}, nil",
+			this.ListTypeName,
+			this.ColumnTypeInstanceByFieldName(u.Name),
+		)
+		pw.deindent()
+		pw.fprintLn("}")
+	}
+
+	if len(this.Parent.PrimaryKey) != 0 {
+		var pkLoaded []string
+		for _, pk := range this.Parent.PrimaryKey {
+			pkLoaded = append(pkLoaded,
+				fmt.Sprintf("this.IsLoaded.%s", pk.Name))
+		}
+
+		pw.fprintLn("if %s {",
+			strings.Join(pkLoaded, " && "))
+		pw.indent()
+		pw.fprintLn("return %s{", this.ListTypeName)
+
+		for _, pk := range this.Parent.PrimaryKey {
+			pw.fprintLn("%s,", this.ColumnTypeInstanceByFieldName(pk.Name))
+		}
+
+		pw.fprintLn("}, nil")
+		pw.deindent()
+		pw.fprintLn("}")
+	}
+
+	pw.fprintLn("return nil, %s.RowNotUniquelyIdentifiableError{Instance: this}",
+		sillyquil_runtime_pkg_name)
+	pw.deindent()
+	pw.fprintLn("}")
 	return nil
 }

@@ -17,8 +17,7 @@ type RowNotUniquelyIdentifiableError struct {
 }
 
 func (this RowNotUniquelyIdentifiableError) Error() string {
-	return fmt.Sprintf("Instance of %T row in table %q not uniquely identifiable:%v",
+	return fmt.Sprintf("Instance of type %T not uniquely identifiable:%v",
 		this.Instance,
-		this.TableName,
 		this.Instance)
 }

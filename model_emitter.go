@@ -148,6 +148,7 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	emitters = append(emitters, columnizedStruct)
 
 	columnType := NewColumnType(columnizedStruct)
+	columnizedStruct.TheColumnType = columnType
 
 	emitters = append(emitters, columnType)
 
