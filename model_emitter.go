@@ -89,6 +89,17 @@ func (pw *panicWriter) printDataType(dt []interface{}) error {
 	if !ok {
 		return fmt.Errorf("First element not %T", rk)
 	}
+	i := 1
+
+	if rk == reflect.Ptr {
+		fmt.Fprintf(pw, "*")
+
+		rk, ok = dt[i].(reflect.Kind)
+		i++
+		if !ok {
+			return fmt.Errorf("First element not %T", rk)
+		}
+	}
 
 	switch rk {
 	case reflect.Int32,
@@ -98,9 +109,11 @@ func (pw *panicWriter) printDataType(dt []interface{}) error {
 		reflect.Float64:
 		fmt.Fprintf(pw, "%v", rk)
 	case reflect.Struct:
-		fmt.Fprintf(pw, "%T", dt[1])
+		fmt.Fprintf(pw, "%T", dt[i])
+		i++
 	case reflect.Slice:
-		fmt.Fprintf(pw, "[]%v", dt[1])
+		fmt.Fprintf(pw, "[]%v", dt[i])
+		i++
 	default:
 		return fmt.Errorf("Not convertable %v", dt)
 	}
@@ -561,21 +574,27 @@ const sillyquil_runtime_pkg_name = "sillyquill_rt"
 func columnToDataType(c Column) []interface{} {
 	dt := c.DataType()
 
+	var stub []interface{}
+
+	if c.Nullable() {
+		stub = []interface{}{reflect.Ptr}
+	}
+
 	switch dt {
 	case SqlInt:
-		return []interface{}{reflect.Int32}
+		return append(stub, reflect.Int32)
 	case SqlBigInt:
-		return []interface{}{reflect.Int64}
+		return append(stub, reflect.Int64)
 	case SqlBoolean:
-		return []interface{}{reflect.Bool}
+		return append(stub, reflect.Bool)
 	case SqlTimestamp:
-		return []interface{}{reflect.Struct, time.Time{}}
+		return append(stub, reflect.Struct, time.Time{})
 	case SqlVarChar:
-		return []interface{}{reflect.String}
+		return append(stub, reflect.String)
 	case SqlFloat64:
-		return []interface{}{reflect.Float64}
+		return append(stub, reflect.Float64)
 	case SqlByteArray:
-		return []interface{}{reflect.Slice, reflect.Uint8}
+		return append(stub, reflect.Slice, reflect.Uint8)
 	}
 
 	return nil
