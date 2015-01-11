@@ -138,11 +138,9 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	pw.fprintLn("package %s", this.Package)
 	pw.fprintLn("")
 	pw.fprintLn(`import "database/sql"`)
-	if isIdentifiable {
+	pw.fprintLn(`import "bytes"`)
+	pw.fprintLn(`import "fmt"`)
 
-		pw.fprintLn(`import "bytes"`)
-		pw.fprintLn(`import "fmt"`)
-	}
 	pw.fprintLn(`import "github.com/hydrogen18/sillyquill/rt"`)
 
 	columns, err := table.Columns()
@@ -198,6 +196,49 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	fmt.Fprintf(pw, "%s}\n", this.Tab)
 	fmt.Fprintf(pw, "}\n")
 	fmt.Fprintf(pw, "\n")
+
+	//---
+
+	pw.fprintLn("func (this *%s) String() string {", singluarModelName)
+	pw.indent()
+	pw.fprintLn("var buf bytes.Buffer")
+	pw.fprintLn(`fmt.Fprintf(&buf,"%s{")`, singluarModelName)
+	for i, column := range columns {
+		columnName := this.ColumnNameToCodeName(column.Name())
+
+		dt := this.ColumnToDataType(column)
+		if dt[0] != reflect.Ptr {
+			pw.fprintLn(`fmt.Fprintf(&buf,"%s:%%v",this.%s)`,
+				columnName,
+				columnName)
+		} else {
+			pw.fprintLn("if this.%s != nil {", columnName)
+			pw.indent()
+			pw.fprintLn(`fmt.Fprintf(&buf,"%s:%%v",*this.%s)`,
+				columnName,
+				columnName,
+			)
+			pw.deindent()
+			pw.fprintLn("} else {")
+			pw.indent()
+			pw.fprintLn(`fmt.Fprintf(&buf,"%s:nil")`,
+				columnName,
+			)
+			pw.deindent()
+			pw.fprintLn("}")
+
+		}
+
+		if i != len(columns)-1 {
+			pw.fprintLn(`(&buf).WriteRune(' ')`)
+		}
+	}
+	pw.fprintLn(`(&buf).WriteRune('}')`)
+	pw.fprintLn("return (&buf).String()")
+	pw.deindent()
+	pw.fprintLn("}")
+
+	//---
 
 	privateModelName := strings.ToLower(modelName[0:1])
 	privateModelName = privateModelName + modelName[1:]
