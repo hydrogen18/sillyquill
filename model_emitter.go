@@ -214,8 +214,9 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	for i, column := range columns {
 		columnName := this.ColumnNameToCodeName(column.Name())
 
-		pw.indent()
 		pw.fprintLn("if this.isLoaded.%s {", columnName)
+		pw.indent()
+
 		dt := this.ColumnToDataType(column)
 		if dt[0] != reflect.Ptr {
 			pw.fprintLn(`fmt.Fprintf(&buf,"%s:%%v",this.%s)`,
@@ -242,9 +243,10 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 		if i != len(columns)-1 {
 			pw.fprintLn(`(&buf).WriteRune(' ')`)
 		}
+		pw.deindent()
 
 		pw.fprintLn("}")
-		pw.deindent()
+
 	}
 	pw.fprintLn(`(&buf).WriteRune('}')`)
 	pw.fprintLn("return (&buf).String()")
