@@ -130,6 +130,13 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 
 	isIdentifiable := len(uniqueColumns) != 0
 
+	primaryKeyColumns, err := table.PrimaryKey()
+	if err != nil {
+		return err
+	}
+
+	isIdentifiable = isIdentifiable || len(primaryKeyColumns) != 0
+
 	pw := &panicWriter{
 		Writer: w,
 		level:  0,
@@ -150,7 +157,8 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 
 	//TODO - figure out how to remove hack ?
 	for _, column := range columns {
-		if column.DataType() == SqlTimestamp {
+		if column.DataType() == SqlTimestamp ||
+			column.DataType() == SqlDate {
 			pw.fprintLn(`import "time"`)
 			break
 		}
@@ -206,6 +214,8 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	for i, column := range columns {
 		columnName := this.ColumnNameToCodeName(column.Name())
 
+		pw.indent()
+		pw.fprintLn("if this.isLoaded.%s {", columnName)
 		dt := this.ColumnToDataType(column)
 		if dt[0] != reflect.Ptr {
 			pw.fprintLn(`fmt.Fprintf(&buf,"%s:%%v",this.%s)`,
@@ -232,6 +242,9 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 		if i != len(columns)-1 {
 			pw.fprintLn(`(&buf).WriteRune(' ')`)
 		}
+
+		pw.fprintLn("}")
+		pw.deindent()
 	}
 	pw.fprintLn(`(&buf).WriteRune('}')`)
 	pw.fprintLn("return (&buf).String()")
@@ -298,8 +311,8 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 			pw.fprintLn("err = this.loadColumnsWhere(db,uniqueIdentifiers,%s)",
 				columnNameToEnum[column.Name()])
 			pw.fprintLn("return this.%s, err", columnName)
-			pw.deindent()
 		}
+		pw.deindent()
 		pw.fprintLn("}")
 	}
 	pw.fprintLn("")
@@ -537,6 +550,37 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 			pw.fprintLn("}")
 
 		}
+
+		if len(primaryKeyColumns) != 0 {
+			pw.fprintLn("if ")
+			for i, column := range primaryKeyColumns {
+				var operator string
+
+				if i != len(primaryKeyColumns)-1 {
+					operator = "&&"
+				} else {
+					operator = "{"
+				}
+				columnName := this.ColumnNameToCodeName(column)
+				pw.fprintLn("this.isLoaded.%s %s",
+					columnName,
+					operator)
+
+			}
+			pw.indent()
+			pw.fprintLn("return %s{", columnEnumListType)
+			for _, column := range primaryKeyColumns {
+
+				pw.fprintLn("%s,",
+					columnNameToEnum[column])
+
+			}
+			pw.fprintLn("}, nil")
+
+			pw.deindent()
+			pw.fprintLn("}")
+		}
+
 		pw.fprintLn("return nil, %s.RowNotUniquelyIdentifiableError{Instance:*this,TableName:%q}",
 			sillyquil_runtime_pkg_name,
 			table.Name())
@@ -624,13 +668,13 @@ func columnToDataType(c Column) []interface{} {
 	switch dt {
 	case SqlInt:
 		return append(stub, reflect.Int32)
-	case SqlBigInt:
+	case SqlBigInt, SqlNumeric: //TODO fix this should use big.Int
 		return append(stub, reflect.Int64)
 	case SqlBoolean:
 		return append(stub, reflect.Bool)
-	case SqlTimestamp:
+	case SqlTimestamp, SqlDate:
 		return append(stub, reflect.Struct, time.Time{})
-	case SqlVarChar:
+	case SqlVarChar, SqlText:
 		return append(stub, reflect.String)
 	case SqlFloat64:
 		return append(stub, reflect.Float64)

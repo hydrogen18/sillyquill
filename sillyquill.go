@@ -7,11 +7,13 @@ import "database/sql"
 import "fmt"
 import "strings"
 import "os"
+import "sync"
 
 type Table interface {
 	Name() string
 	Columns() ([]Column, error)
 	Unique() ([]string, error)
+	PrimaryKey() ([]string, error)
 }
 
 type SqlDataType int
@@ -24,14 +26,25 @@ const SqlVarChar = SqlDataType(4)
 const SqlBoolean = SqlDataType(5)
 const SqlTimestamp = SqlDataType(6)
 const SqlFloat64 = SqlDataType(7)
+const SqlText = SqlDataType(8)
+const SqlNumeric = SqlDataType(9)
+const SqlDate = SqlDataType(10)
 
-type ErrNoSuchDataType string
-
-func (this ErrNoSuchDataType) Error() string {
-	return fmt.Sprintf("No match for datatype %q", string(this))
+type ErrNoSuchDataType struct {
+	SqlTypeName string
+	TableName   string
+	ColumnName  string
 }
 
-func StringToSqlDataType(v string) (SqlDataType, error) {
+func (this ErrNoSuchDataType) Error() string {
+	return fmt.Sprintf("No such datatype %q for column %q of table %q",
+		this.SqlTypeName,
+		this.ColumnName,
+		this.TableName,
+	)
+}
+
+func (this *InformationSchemaColumn) StringToSqlDataType(v string) (SqlDataType, error) {
 
 	dataType := strings.Trim(strings.ToUpper(v), " ")
 
@@ -44,10 +57,16 @@ func StringToSqlDataType(v string) (SqlDataType, error) {
 		return SqlBoolean, nil
 	case "CHARACTER VARYING":
 		return SqlVarChar, nil
+	case "TEXT":
+		return SqlText, nil
 	case "BYTEA":
 		return SqlByteArray, nil
 	case "DOUBLE PRECISION":
 		return SqlFloat64, nil
+	case "DATE":
+		return SqlDate, nil
+	case "NUMERIC": //TODO handle variable precision on type
+		return SqlNumeric, nil
 
 	}
 
@@ -56,7 +75,11 @@ func StringToSqlDataType(v string) (SqlDataType, error) {
 		return SqlTimestamp, nil
 	}
 
-	return sqlUnknown, ErrNoSuchDataType(v)
+	return sqlUnknown, ErrNoSuchDataType{
+		ColumnName:  this.name,
+		TableName:   this.parent.name,
+		SqlTypeName: v,
+	}
 }
 
 type Column interface {
@@ -74,6 +97,7 @@ type InformationSchemaColumn struct {
 	name     string
 	dataType SqlDataType
 	nullable bool
+	parent   *InformationSchemaTable
 }
 
 func (this *InformationSchemaColumn) Name() string {
@@ -97,7 +121,15 @@ func (this *InformationSchemaTable) Name() string {
 	return this.name
 }
 
+func (this *InformationSchemaTable) PrimaryKey() ([]string, error) {
+	return this.columnNamesWhereConstraintType("PRIMARY KEY")
+}
+
 func (this *InformationSchemaTable) Unique() ([]string, error) {
+	return this.columnNamesWhereConstraintType("UNIQUE")
+}
+
+func (this *InformationSchemaTable) columnNamesWhereConstraintType(constraint_type string) ([]string, error) {
 	const query = `Select 
 	column_name 
 	from 
@@ -114,13 +146,14 @@ func (this *InformationSchemaTable) Unique() ([]string, error) {
 	and 
 		information_schema.table_constraints.table_name = $2
 	and 
-		constraint_type = 'UNIQUE'`
+		constraint_type = $3`
 
 	var uniques []string
 	var err error
 
 	rows, err := this.parent.db.Query(query, this.parent.TableSchema,
-		this.name)
+		this.name,
+		constraint_type)
 	if err != nil {
 		return nil, err
 	}
@@ -167,17 +200,20 @@ func (this *InformationSchemaTable) Columns() ([]Column, error) {
 			return nil, err
 		}
 
-		sdt, err := StringToSqlDataType(data_type)
+		col := &InformationSchemaColumn{}
+		col.parent = this
+		col.name = column_name
+
+		col.dataType, err = col.StringToSqlDataType(data_type)
 		if err != nil {
 			return nil, err
 		}
 
-		var isNullable bool
 		switch is_nullable {
 		case "NO":
-			isNullable = false
+			col.nullable = false
 		case "YES":
-			isNullable = true
+			col.nullable = true
 		default:
 			return nil, fmt.Errorf("Bad value for is_nullable table %q column %q:%v",
 				this.name,
@@ -186,11 +222,7 @@ func (this *InformationSchemaTable) Columns() ([]Column, error) {
 		}
 
 		result = append(result,
-			&InformationSchemaColumn{
-				nullable: isNullable,
-				dataType: sdt,
-				name:     column_name,
-			})
+			col)
 	}
 
 	if rows.Err() != nil {
@@ -229,10 +261,10 @@ func (this *InformationSchemaAdapter) Tables() ([]Table, error) {
 
 func main() {
 	flag.Parse()
-	const dbconfig = "dbname=ericu sslmode=disable"
+	const dbconfig = "user=skypal password=ismypal dbname=ccm_development sslmode=disable host=10.192.4.57"
 
 	db, err := sql.Open("postgres", dbconfig)
-
+	db.SetMaxOpenConns(16)
 	if err != nil {
 		spicelog.Fatalf("%v", err)
 	}
@@ -248,10 +280,30 @@ func main() {
 		spicelog.Fatalf("%v", err)
 	}
 
+	exclude_tables := make(map[string]int)
+	exclude_tables["how_to_steps"] = 0
+	exclude_tables["meetings"] = 0
+	exclude_tables["messaging_inbox_entries"] = 0
+	exclude_tables["messaging_topics"] = 0
+	exclude_tables["messaging_messages"] = 0
+	exclude_tables["spice_list_items"] = 0
+	exclude_tables["spice_lists"] = 0
+	exclude_tables["topics"] = 0
+	exclude_tables["vendor_pages"] = 0
+	exclude_tables["meeting_comments"] = 0
+	exclude_tables["posts"] = 0
+	exclude_tables["vendors"] = 0
+	exclude_tables["products"] = 0
+	exclude_tables["how_to_articles"] = 0
+
+	wg := new(sync.WaitGroup)
 	for _, table := range tables {
 		var err error
 
 		spicelog.Infof("Table %q", table.Name())
+		if _, ok := exclude_tables[table.Name()]; ok {
+			continue
+		}
 		uniques, err := table.Unique()
 		if err != nil {
 			spicelog.Fatalf("err:%v", err)
@@ -259,28 +311,35 @@ func main() {
 		for _, u := range uniques {
 			spicelog.Infof("unique %q", u)
 		}
-		me := NewModelEmitter()
-		me.Package = "dal"
 
-		fout, err := os.OpenFile(fmt.Sprintf("/home/ericu/sillyquill/src/dummy/dal/%s.go",
-			table.Name()),
-			os.O_TRUNC|os.O_WRONLY|os.O_CREATE,
-			0640)
-		if err != nil {
-			spicelog.Fatalf("err:%v", err)
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 
-		err = me.Emit(table, fout)
-		if err != nil {
-			spicelog.Fatalf("err:%v", err)
-		}
+			me := NewModelEmitter()
+			me.Package = "dal"
 
-		err = fout.Close()
-		if err != nil {
-			spicelog.Fatalf("err:%v", err)
-		}
+			fout, err := os.OpenFile(fmt.Sprintf("/home/ericu/sillyquill/src/dummy/dal/%s.go",
+				table.Name()),
+				os.O_TRUNC|os.O_WRONLY|os.O_CREATE,
+				0640)
+			if err != nil {
+				spicelog.Errorf("err:%v", err)
+			}
+
+			err = me.Emit(table, fout)
+			if err != nil {
+				spicelog.Errorf("Error:%v", err)
+			}
+
+			err = fout.Close()
+			if err != nil {
+				spicelog.Fatalf("err:%v", err)
+			}
+		}()
 
 	}
+	wg.Wait()
 
 	spicelog.Stop()
 }
