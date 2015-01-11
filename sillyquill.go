@@ -11,6 +11,7 @@ import "os"
 type Table interface {
 	Name() string
 	Columns() ([]Column, error)
+	Unique() ([]string, error)
 }
 
 type SqlDataType int
@@ -22,6 +23,7 @@ const SqlByteArray = SqlDataType(3)
 const SqlVarChar = SqlDataType(4)
 const SqlBoolean = SqlDataType(5)
 const SqlTimestamp = SqlDataType(6)
+const SqlFloat64 = SqlDataType(7)
 
 type ErrNoSuchDataType string
 
@@ -44,9 +46,12 @@ func StringToSqlDataType(v string) (SqlDataType, error) {
 		return SqlVarChar, nil
 	case "BYTEA":
 		return SqlByteArray, nil
+	case "DOUBLE PRECISION":
+		return SqlFloat64, nil
 
 	}
 
+	//TODO handle timezones
 	if strings.HasPrefix(dataType, "TIMESTAMP") {
 		return SqlTimestamp, nil
 	}
@@ -90,6 +95,52 @@ type InformationSchemaTable struct {
 
 func (this *InformationSchemaTable) Name() string {
 	return this.name
+}
+
+func (this *InformationSchemaTable) Unique() ([]string, error) {
+	const query = `Select 
+	column_name 
+	from 
+		information_schema.table_constraints
+	left join
+		information_schema.constraint_column_usage	
+	on
+		information_schema.constraint_column_usage.constraint_name
+	= 
+		information_schema.table_constraints.constraint_name
+	
+	where 
+		information_schema.table_constraints.table_schema = $1
+	and 
+		information_schema.table_constraints.table_name = $2
+	and 
+		constraint_type = 'UNIQUE'`
+
+	var uniques []string
+	var err error
+
+	rows, err := this.parent.db.Query(query, this.parent.TableSchema,
+		this.name)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+
+		var u string
+		err = rows.Scan(&u)
+		if err != nil {
+			return nil, err
+		}
+		uniques = append(uniques, u)
+
+	}
+
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+
+	return uniques, nil
+
 }
 
 func (this *InformationSchemaTable) Columns() ([]Column, error) {
@@ -200,17 +251,34 @@ func main() {
 	for _, table := range tables {
 		var err error
 
-		//spicelog.Infof("Table %q", table.Name())
+		spicelog.Infof("Table %q", table.Name())
+		uniques, err := table.Unique()
+		if err != nil {
+			spicelog.Fatalf("err:%v", err)
+		}
+		for _, u := range uniques {
+			spicelog.Infof("unique %q", u)
+		}
 		me := NewModelEmitter()
 		me.Package = "dal"
 
-		if table.Name() == "examples" {
-			err = me.Emit(table, os.Stdout)
-			if err != nil {
-				spicelog.Fatalf("err:%v", err)
-			}
+		fout, err := os.OpenFile(fmt.Sprintf("/home/ericu/sillyquill/src/dummy/dal/%s.go",
+			table.Name()),
+			os.O_TRUNC|os.O_WRONLY|os.O_CREATE,
+			0640)
+		if err != nil {
+			spicelog.Fatalf("err:%v", err)
 		}
-		os.Stdout.Sync()
+
+		err = me.Emit(table, fout)
+		if err != nil {
+			spicelog.Fatalf("err:%v", err)
+		}
+
+		err = fout.Close()
+		if err != nil {
+			spicelog.Fatalf("err:%v", err)
+		}
 
 	}
 

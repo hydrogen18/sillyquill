@@ -84,7 +84,39 @@ func (this *panicWriter) returnIf(ifClause, returnClause string) {
 	this.fprintLn("}")
 }
 
+func (pw *panicWriter) printDataType(dt []interface{}) error {
+	rk, ok := dt[0].(reflect.Kind)
+	if !ok {
+		return fmt.Errorf("First element not %T", rk)
+	}
+
+	switch rk {
+	case reflect.Int32,
+		reflect.Int64,
+		reflect.Bool,
+		reflect.String,
+		reflect.Float64:
+		fmt.Fprintf(pw, "%v", rk)
+	case reflect.Struct:
+		fmt.Fprintf(pw, "%T", dt[1])
+	case reflect.Slice:
+		fmt.Fprintf(pw, "[]%v", dt[1])
+	default:
+		return fmt.Errorf("Not convertable %v", dt)
+	}
+
+	return nil
+
+}
+
 func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
+	uniqueColumns, err := table.Unique()
+	if err != nil {
+		return err
+	}
+
+	isIdentifiable := len(uniqueColumns) != 0
+
 	pw := &panicWriter{
 		Writer: w,
 		level:  0,
@@ -92,6 +124,12 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	}
 	pw.fprintLn("package %s", this.Package)
 	pw.fprintLn("")
+	pw.fprintLn(`import "database/sql"`)
+	if isIdentifiable {
+
+		pw.fprintLn(`import "bytes"`)
+		pw.fprintLn(`import "fmt"`)
+	}
 	pw.fprintLn(`import "github.com/hydrogen18/sillyquill/rt"`)
 
 	columns, err := table.Columns()
@@ -128,22 +166,7 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 			return fmt.Errorf("No data type for %q", column.Name())
 		}
 
-		rk, ok := dt[0].(reflect.Kind)
-		if !ok {
-			panic(dt[0])
-		}
-
-		switch rk {
-		case reflect.Int32,
-			reflect.Int64,
-			reflect.Bool,
-			reflect.String:
-			fmt.Fprintf(pw, "%v", rk)
-		case reflect.Struct:
-			fmt.Fprintf(pw, "%T", dt[1])
-		case reflect.Slice:
-			fmt.Fprintf(pw, "[]%v", dt[1])
-		}
+		pw.printDataType(dt)
 
 		fmt.Fprintf(pw, " //Column Name:%s\n", column.Name())
 	}
@@ -163,7 +186,6 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	fmt.Fprintf(pw, "}\n")
 	fmt.Fprintf(pw, "\n")
 
-	//---
 	privateModelName := strings.ToLower(modelName[0:1])
 	privateModelName = privateModelName + modelName[1:]
 
@@ -185,6 +207,68 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 
 		columnNameToEnum[column.Name()] = tname
 	}
+	//---
+	pw.fprintLn("")
+
+	for _, column := range columns {
+		columnName := this.ColumnNameToCodeName(column.Name())
+		fmt.Fprintf(pw, "func (this *%s) Get%s(db *sql.DB) (",
+			singluarModelName,
+			columnName,
+		)
+
+		dt := this.ColumnToDataType(column)
+		err = pw.printDataType(dt)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(pw, ", error) {\n")
+		pw.indent()
+
+		pw.fprintLn("if this.isLoaded.%s {", columnName)
+		pw.indent()
+		pw.fprintLn("return this.%s, nil", columnName)
+		pw.deindent()
+		pw.fprintLn("}")
+
+		if !isIdentifiable {
+			pw.fprintLn("return this.%s, %s.RowNotUniquelyIdentifiableError{Instance:this, TableName:%q}",
+				columnName,
+				sillyquil_runtime_pkg_name,
+				table.Name())
+		} else {
+			pw.fprintLn("uniqueIdentifiers, err := this.identifyingColumns()")
+			//TODO return the zero-value of the data type
+			pw.returnIf("err != nil", fmt.Sprintf("this.%s, err", columnName))
+
+			pw.fprintLn("err = this.loadColumnsWhere(db,uniqueIdentifiers,%s)",
+				columnNameToEnum[column.Name()])
+			pw.fprintLn("return this.%s, err", columnName)
+			pw.deindent()
+		}
+		pw.fprintLn("}")
+	}
+	pw.fprintLn("")
+
+	//---
+	pw.fprintLn("")
+	pw.fprintLn("func (this %s) String() string{", columnEnumType)
+	pw.indent()
+	pw.fprintLn("switch(this) {")
+
+	for columnName, enumName := range columnNameToEnum {
+		pw.fprintLn("case %s:", enumName)
+		pw.indent()
+		pw.fprintLn("return %q", columnName)
+		pw.deindent()
+	}
+	pw.fprintLn("}")
+	pw.fprintLn("return \"\"")
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.fprintLn("")
+
+	//---
 	pw.fprintLn("")
 	pw.fprintLn("func (this %s) pointerInto(m *%s) interface{} {", columnEnumType,
 		singluarModelName)
@@ -203,6 +287,8 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	pw.fprintLn("}")
 	pw.fprintLn("")
 
+	//--
+
 	pw.fprintLn("func (this %s) setLoaded(m *%s) {", columnEnumType, singluarModelName)
 
 	pw.indent()
@@ -216,6 +302,26 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	}
 
 	pw.fprintLn("}")
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.fprintLn("")
+
+	//---
+
+	pw.fprintLn("func (this %s) valueOf(m *%s) interface{} {", columnEnumType, singluarModelName)
+
+	pw.indent()
+	pw.fprintLn("switch(this) {")
+
+	for columnName, enumName := range columnNameToEnum {
+		pw.fprintLn("case %s:", enumName)
+		pw.indent()
+		pw.fprintLn("return m.%s", this.ColumnNameToCodeName(columnName))
+		pw.deindent()
+	}
+
+	pw.fprintLn("}")
+	pw.fprintLn("return nil")
 	pw.deindent()
 	pw.fprintLn("}")
 	pw.fprintLn("")
@@ -254,6 +360,57 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	pw.fprintLn("}")
 
 	//---
+
+	if isIdentifiable {
+		pw.fprintLn("func (this %s) andClauseOf(m *%s, pi int) string {",
+			columnEnumListType,
+			singluarModelName,
+		)
+
+		pw.indent()
+		pw.fprintLn("var buf bytes.Buffer")
+		pw.fprintLn("for i, v := range this {")
+		pw.indent()
+		pw.fprintLn("(&buf).WriteString(v.String())")
+		pw.fprintLn(`(&buf).WriteRune('=')`)
+		pw.fprintLn(`fmt.Fprintf((&buf),"$%%d",pi)`)
+		pw.fprintLn("pi++")
+		pw.fprintLn("if i != len(this) - 1 {")
+		pw.indent()
+		pw.fprintLn(`(&buf).WriteString("and")`)
+		pw.deindent()
+		pw.fprintLn("}")
+		pw.deindent()
+		pw.fprintLn("}")
+		pw.fprintLn("return (&buf).String()")
+		pw.deindent()
+
+		pw.fprintLn("}")
+		pw.fprintLn("")
+	}
+	//---
+
+	if isIdentifiable {
+		pw.fprintLn("func (this %s) valuesOf(m *%s) []interface{} {",
+			columnEnumListType,
+			singluarModelName,
+		)
+
+		pw.indent()
+		pw.fprintLn("result := make([]interface{},len(this))")
+		pw.fprintLn("for i, v := range this {")
+		pw.indent()
+		pw.fprintLn("result[i] = v.valueOf(m)")
+		pw.deindent()
+		pw.fprintLn("}")
+		pw.fprintLn("return result")
+		pw.deindent()
+
+		pw.fprintLn("}")
+		pw.fprintLn("")
+	}
+	//---
+
 	columnAnalyzerFunctionName := fmt.Sprintf("analyze%sColumns",
 		modelName)
 	pw.fprintLn("func %s(names []string) (%s, error) {", columnAnalyzerFunctionName, columnEnumListType)
@@ -309,6 +466,33 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 
 	//---
 
+	if isIdentifiable {
+		pw.fprintLn("func (this *%s) identifyingColumns() (%s,error) {",
+			singluarModelName,
+			columnEnumListType,
+		)
+
+		pw.indent()
+		for _, column := range uniqueColumns {
+
+			structName := this.ColumnNameToCodeName(column)
+			pw.fprintLn("if this.isLoaded.%s {", structName)
+			pw.indent()
+			pw.fprintLn("return %s{%s}, nil", columnEnumListType, columnNameToEnum[column])
+			pw.deindent()
+			pw.fprintLn("}")
+
+		}
+		pw.fprintLn("return nil, %s.RowNotUniquelyIdentifiableError{Instance:*this,TableName:%q}",
+			sillyquil_runtime_pkg_name,
+			table.Name())
+		pw.deindent()
+
+		pw.fprintLn("}")
+	}
+
+	//---
+
 	pw.fprintLn("")
 
 	pw.fprintLn("func LoadMany%s(rows %s.Rows) ([]%s,error) {",
@@ -321,7 +505,7 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	pw.returnIf("err != nil", "nil,err")
 
 	pw.fprintLn("columns, err := %s(columnNames)", columnAnalyzerFunctionName)
-	pw.returnIf("err != nil", "nil,err")
+	pw.returnIf("err != nil", "nil, err")
 	pw.fprintLn("var result []%s", singluarModelName)
 	pw.fprintLn("for rows.Next() {")
 	pw.indent()
@@ -330,16 +514,44 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	pw.fprintLn("if err != nil {")
 	pw.indent()
 	pw.fprintLn("rows.Close()")
-	pw.fprintLn("return nil,err")
+	pw.fprintLn("return nil, err")
 	pw.deindent()
 	pw.fprintLn("}")
 	pw.fprintLn("result = append(result,m)")
 	pw.deindent()
 	pw.fprintLn("}")
-	pw.returnIf("rows.Err() != nil", "nil,rows.Err()")
-	pw.fprintLn("return result,nil")
+	pw.returnIf("rows.Err() != nil", "nil, rows.Err()")
+	pw.fprintLn("return result, nil")
 	pw.deindent()
 	pw.fprintLn("}")
+
+	if isIdentifiable {
+		pw.fprintLn("func (this *%s) loadColumnsWhere(db *sql.DB, where %s,columns ...%s) error {",
+			singluarModelName,
+			columnEnumListType,
+			columnEnumType)
+
+		pw.indent()
+		pw.fprintLn("var buf bytes.Buffer")
+		pw.fprintLn(`(&buf).WriteString("Select ")`)
+		pw.fprintLn("for i, column := range columns {")
+		pw.indent()
+		pw.fprintLn(`fmt.Fprintf(&buf,"%%q",column)`)
+		pw.fprintLn("if i != len(columns) - 1 {")
+		pw.indent()
+		pw.fprintLn(`(&buf).WriteString(",")`)
+		pw.deindent()
+		pw.fprintLn("}")
+		pw.deindent()
+		pw.fprintLn("}")
+		pw.fprintLn("(&buf).WriteString(` from %q where `)", table.Name())
+		pw.fprintLn("(&buf).WriteString(where.andClauseOf(this,1))")
+
+		pw.fprintLn("row := db.QueryRow(buf.String(),where.valuesOf(this)...)")
+		pw.fprintLn("return this.loadWithColumns(columns,row)")
+		pw.deindent()
+		pw.fprintLn("}")
+	}
 
 	return nil
 }
@@ -360,6 +572,8 @@ func columnToDataType(c Column) []interface{} {
 		return []interface{}{reflect.Struct, time.Time{}}
 	case SqlVarChar:
 		return []interface{}{reflect.String}
+	case SqlFloat64:
+		return []interface{}{reflect.Float64}
 	case SqlByteArray:
 		return []interface{}{reflect.Slice, reflect.Uint8}
 	}
