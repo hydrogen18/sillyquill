@@ -12,8 +12,7 @@ func (this UnknownColumnError) Error() string {
 }
 
 type RowNotUniquelyIdentifiableError struct {
-	Instance  interface{}
-	TableName string
+	Instance interface{}
 }
 
 func (this RowNotUniquelyIdentifiableError) Error() string {
