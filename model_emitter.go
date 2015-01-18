@@ -88,39 +88,11 @@ func (this *panicWriter) returnIf(ifClause, returnClause string) {
 }
 
 func (pw *panicWriter) printDataType(dt []interface{}) error {
-	rk, ok := dt[0].(reflect.Kind)
-	if !ok {
-		return fmt.Errorf("First element not %T", rk)
+	v, err := dataTypeToString(dt)
+	if err != nil {
+		return err
 	}
-	i := 1
-
-	if rk == reflect.Ptr {
-		fmt.Fprintf(pw, "*")
-
-		rk, ok = dt[i].(reflect.Kind)
-		i++
-		if !ok {
-			return fmt.Errorf("First element not %T", rk)
-		}
-	}
-
-	switch rk {
-	case reflect.Int32,
-		reflect.Int64,
-		reflect.Bool,
-		reflect.String,
-		reflect.Float64:
-		fmt.Fprintf(pw, "%v", rk)
-	case reflect.Struct:
-		fmt.Fprintf(pw, "%T", dt[i])
-		i++
-	case reflect.Slice:
-		fmt.Fprintf(pw, "[]%v", dt[i])
-		i++
-	default:
-		return fmt.Errorf("Not convertable %v", dt)
-	}
-
+	fmt.Fprintf(pw, v)
 	return nil
 
 }
@@ -218,6 +190,8 @@ func columnToDataType(c Column) []interface{} {
 	}
 
 	switch dt {
+	case SqlSmallInt:
+		return append(stub, reflect.Int16)
 	case SqlInt:
 		return append(stub, reflect.Int32)
 	case SqlBigInt, SqlNumeric: //TODO fix this should use big.Int
@@ -232,6 +206,8 @@ func columnToDataType(c Column) []interface{} {
 		return append(stub, reflect.Float64)
 	case SqlByteArray:
 		return append(stub, reflect.Slice, reflect.Uint8)
+	case SqlReal:
+		return append(stub, reflect.Float32)
 	}
 
 	return nil

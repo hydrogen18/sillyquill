@@ -160,7 +160,9 @@ func dataTypeToString(dt []interface{}) (string, error) {
 		reflect.Int64,
 		reflect.Bool,
 		reflect.String,
-		reflect.Float64:
+		reflect.Float64,
+		reflect.Int16,
+		reflect.Float32:
 		fmt.Fprintf(buf, "%v", rk)
 	case reflect.Struct:
 		fmt.Fprintf(buf, "%T", dt[i])
@@ -169,7 +171,7 @@ func dataTypeToString(dt []interface{}) (string, error) {
 		fmt.Fprintf(buf, "[]%v", dt[i])
 		i++
 	default:
-		return "", fmt.Errorf("Not convertable %v", dt)
+		return "", fmt.Errorf("Prototype not convertable %v", dt)
 	}
 
 	return buf.String(), nil

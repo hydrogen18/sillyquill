@@ -28,14 +28,16 @@ const SqlFloat64 = SqlDataType(7)
 const SqlText = SqlDataType(8)
 const SqlNumeric = SqlDataType(9)
 const SqlDate = SqlDataType(10)
+const SqlSmallInt = SqlDataType(11)
+const SqlReal = SqlDataType(12)
 
-type ErrNoSuchDataType struct {
+type NoSuchDataTypeError struct {
 	SqlTypeName string
 	TableName   string
 	ColumnName  string
 }
 
-func (this ErrNoSuchDataType) Error() string {
+func (this NoSuchDataTypeError) Error() string {
 	return fmt.Sprintf("No such datatype %q for column %q of table %q",
 		this.SqlTypeName,
 		this.ColumnName,
@@ -43,11 +45,16 @@ func (this ErrNoSuchDataType) Error() string {
 	)
 }
 
-func (this *InformationSchemaColumn) StringToSqlDataType(v string) (SqlDataType, error) {
+var ErrSkipColumn = fmt.Errorf("Skip column")
 
+func (this *InformationSchemaColumn) StringToSqlDataType(v string) (SqlDataType, error) {
 	dataType := strings.Trim(strings.ToUpper(v), " ")
 
 	switch dataType {
+	case "REAL":
+		return SqlReal, nil
+	case "SMALLINT":
+		return SqlSmallInt, nil
 	case "INT", "INTEGER":
 		return SqlInt, nil
 	case "BIGINT":
@@ -73,9 +80,12 @@ func (this *InformationSchemaColumn) StringToSqlDataType(v string) (SqlDataType,
 		//TIMESTAMPTZ - timestamp with time zone - unsupported
 
 		return SqlTimestamp, nil
+	case "TSVECTOR":
+		//Ignore these columns
+		return sqlUnknown, ErrSkipColumn
 	}
 
-	return sqlUnknown, ErrNoSuchDataType{
+	return sqlUnknown, NoSuchDataTypeError{
 		ColumnName:  this.name,
 		TableName:   this.parent.name,
 		SqlTypeName: v,
@@ -187,7 +197,11 @@ func (this *InformationSchemaTable) columnNamesWhereConstraintType(constraint_ty
 }
 
 func (this *InformationSchemaTable) Columns() ([]Column, error) {
-	const query = `Select column_name,data_type,is_nullable from 
+	const query = `Select column_name,
+	data_type,
+	is_nullable,
+	udt_name
+	 from 
 	information_schema.columns  
 	where 
 		table_name = $1
@@ -205,7 +219,8 @@ func (this *InformationSchemaTable) Columns() ([]Column, error) {
 		var column_name string
 		var data_type string
 		var is_nullable string
-		err := rows.Scan(&column_name, &data_type, &is_nullable)
+		var udt_name string
+		err := rows.Scan(&column_name, &data_type, &is_nullable, &udt_name)
 		if err != nil {
 			return nil, err
 		}
@@ -214,8 +229,17 @@ func (this *InformationSchemaTable) Columns() ([]Column, error) {
 		col.parent = this
 		col.name = column_name
 
+		if strings.ToUpper(data_type) == "USER-DEFINED" {
+			data_type = udt_name
+		}
+
 		col.dataType, err = col.StringToSqlDataType(data_type)
 		if err != nil {
+			if err == ErrSkipColumn {
+				spicelog.Warningf("Skipping column %q of table %q type %q",
+					column_name, this.name, data_type)
+				continue
+			}
 			return nil, err
 		}
 
