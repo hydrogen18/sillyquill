@@ -203,10 +203,6 @@ func (this *ModelEmitter) Emit(table Table, outputPath string) error {
 			return err
 		}
 	}
-
-	_ = columnLoader
-	_ = columnSaver
-
 	return nil
 }
 

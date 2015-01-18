@@ -16,6 +16,8 @@ type ColumnizedField struct {
 	DataTypeDefn []interface{}
 	Name         string
 	DataType     string
+	SqlType      SqlDataType
+	Pointer      bool
 }
 
 type ColumnizedStruct struct {
@@ -26,6 +28,7 @@ type ColumnizedStruct struct {
 	Columns           []Column
 	PrimaryKey        []ColumnizedField
 	Unique            []ColumnizedField
+	PreferredUnique   *ColumnizedField
 	TableName         string
 
 	TheColumnType *ColumnType
@@ -78,11 +81,14 @@ func NewColumnizedStruct(t Table,
 
 		field.Name = columnNameToFieldName(column.Name())
 		field.DataTypeDefn = columnToDataType(column)
+		field.SqlType = column.DataType()
 
 		field.DataType, err = dataTypeToString(field.DataTypeDefn)
 		if err != nil {
 			return nil, err
 		}
+
+		field.Pointer = column.Nullable()
 
 		this.Fields = append(this.Fields, field)
 		spicelog.Infof("Table %q Column %q Field %q",
@@ -99,7 +105,23 @@ func NewColumnizedStruct(t Table,
 		if ok {
 			this.PrimaryKey = append(this.PrimaryKey, field)
 		}
+	}
 
+	if len(this.Unique) != 0 {
+		for _, v := range this.Unique {
+			if v.SqlType == SqlInt {
+				this.PreferredUnique = &v
+				break
+			}
+		}
+
+		if this.PreferredUnique == nil {
+			this.PreferredUnique = &this.Unique[0]
+		}
+
+		spicelog.Infof("Preferred unique for %q is %q",
+			t.Name(),
+			this.PreferredUnique.Name)
 	}
 
 	return this, nil
@@ -320,7 +342,30 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 			field.Name,
 			field.DataType)
 		pw.indent()
-		pw.fprintLn("this.%s = v", field.Name)
+		//Timestamps are handled as a special case.
+		//Always convert the given values to UTC
+		switch field.SqlType {
+		case SqlTimestamp:
+			if field.Pointer {
+				//Do a juggling act to prevent modifying the
+				//instance of time.Time pointed
+				pw.fprintLn("if v != nil {")
+				pw.indent()
+				pw.fprintLn("utcV := new(time.Time)")
+				pw.fprintLn("*utcV = v.UTC()")
+				pw.fprintLn("v = utcV")
+				pw.deindent()
+				pw.fprintLn("}")
+				pw.fprintLn("this.%s = v", field.Name)
+			} else {
+				pw.fprintLn("this.%s = v.UTC()", field.Name)
+			}
+
+		default:
+			pw.fprintLn("this.%s = v", field.Name)
+
+		}
+
 		pw.fprintLn("this.IsSet.%s = true", field.Name)
 		pw.deindent()
 		pw.fprintLn("}")
@@ -369,7 +414,22 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.fprintLn("}") //end if
 	pw.deindent()
 	pw.fprintLn("}") //end for
-	pw.fprintLn("err := this.insertColumns(db,columnsToCreate...)")
+
+	// check for id-style column type and append if not in the list to load
+	//	Is this TODO really needed? The user can't reach this code point if the
+	//  object is not uniquely identifiable
+	pw.fprintLn("var columnsToLoad %s", this.TheColumnType.ListTypeName)
+	if this.PreferredUnique != nil {
+		instanceName := this.TheColumnType.ColumnTypeInstanceByFieldName(this.PreferredUnique.Name)
+		pw.fprintLn("if ! columnsToLoad.Contains(%s) {",
+			instanceName)
+		pw.indent()
+		pw.fprintLn("columnsToLoad = append(columnsToLoad,%s)", instanceName)
+		pw.deindent()
+		pw.fprintLn("}")
+	}
+
+	pw.fprintLn("err := this.insertColumns(db,columnsToLoad,columnsToCreate)")
 	pw.fprintLn("if err == nil {")
 	pw.indent()
 	pw.fprintLn("columnsToCreate.SetLoaded(this,true)")
@@ -410,9 +470,7 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	//This is mandatory because not all columns are unique and the find-or-create
 	//paradigm could return an object that is inconsistent with respect to
 	//the database if the row already exists
-	//TODO check for id column type and append if not in the list to load
-	//	Is this TODO really needed? The user can't reach this code point if the
-	//  object is not uniquely identifiable
+
 	pw.indent()
 	pw.fprintLn("columnsToLoad = append(columnsToLoad,columnsToSave...)")
 	pw.deindent()

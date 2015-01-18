@@ -67,44 +67,39 @@ func (this *ColumnSaver) Emit(pw *panicWriter) error {
 	pw.fprintLn("}")
 
 	//Emit a low level wrapper for INSERT
-	pw.fprintLn("func (this *%s) insertColumns(db *sql.DB, columns ...%s) error {",
+	pw.fprintLn("func (this *%s) insertColumns(db *sql.DB, columnsToLoad %s, columnsToSave %s) error {",
 		this.TheColumnizedStruct.SingularModelName,
-		this.TheColumnType.InterfaceName,
+		this.TheColumnType.ListTypeName,
+		this.TheColumnType.ListTypeName,
 	)
 	pw.indent()
 	pw.fprintLn("var buf bytes.Buffer")
 	pw.fprintLn(`(&buf).WriteString("INSERT INTO %s ( ")`, this.TheColumnizedStruct.TableName)
-	pw.fprintLn("for _, v := range columns {")
+	pw.fprintLn("for _, v := range columnsToSave {")
 	pw.indent()
 	pw.fprintLn(`fmt.Fprintf(&buf,"%%q,",v.Name())`)
 	pw.deindent()
-	pw.fprintLn("}") // end for
-	pw.fprintLn("(&buf).Truncate(buf.Len()-1)")
+	pw.fprintLn("}")                            // end for
+	pw.fprintLn("(&buf).Truncate(buf.Len()-1)") //Remove trailing comma
 	pw.fprintLn(`(&buf).WriteString(") VALUES(")`)
-	pw.fprintLn("for i := range columns {")
+	pw.fprintLn("for i := range columnsToSave {")
 	pw.indent()
 	pw.fprintLn(`fmt.Fprintf(&buf,"$%%d,",i+1)`)
 	pw.deindent()
-	pw.fprintLn("}") // end for
-	pw.fprintLn("(&buf).Truncate(buf.Len() - 1)")
+	pw.fprintLn("}")                              // end for
+	pw.fprintLn("(&buf).Truncate(buf.Len() - 1)") //Remove trailing comma
 	pw.fprintLn(`(&buf).WriteRune(')')`)
-	//TODO add "returning " for all columns in table and scan into result
+	pw.fprintLn(`(&buf).WriteString(" RETURNING ")`)
+	pw.fprintLn("for _, v := range columnsToLoad {")
+	pw.indent()
+	pw.fprintLn(`fmt.Fprintf(&buf,"%%q,",v.Name())`)
+	pw.deindent()
+	pw.fprintLn("}")                              //end for
+	pw.fprintLn("(&buf).Truncate(buf.Len() - 1)") //Remove trailing comma
 
-	pw.fprintLn("args := %s(columns).ValuesOf(this)", this.TheColumnType.ListTypeName)
-	pw.fprintLn("result, err := db.Exec((&buf).String(),args...)")
-	//check result.RowsAffected
-	pw.fprintLn("if err == nil {")
-	pw.indent()
-	pw.fprintLn("var rowsAffected int64")
-	pw.fprintLn("rowsAffected, err = result.RowsAffected()")
-	pw.fprintLn("if err == nil && rowsAffected != 1 {")
-	pw.indent()
-	pw.fprintLn("return %s.RowDoesNotExistError{Instance: this}", sillyquil_runtime_pkg_name)
-	pw.deindent()
-	pw.fprintLn("}")
-	pw.deindent()
-	pw.fprintLn("}")
-	pw.fprintLn("return err")
+	pw.fprintLn("args := columnsToSave.ValuesOf(this)")
+	pw.fprintLn("result := db.QueryRow((&buf).String(),args...)")
+	pw.fprintLn("return this.loadWithColumns(columnsToLoad,result)")
 	pw.deindent()
 	pw.fprintLn("}")
 
@@ -159,9 +154,9 @@ func (this *ColumnSaver) Emit(pw *panicWriter) error {
 	pw.fprintLn("args := where.ValuesOf(this)")
 	pw.fprintLn("args = append(args, columnsToSave.ValuesOf(this)...)")
 	pw.fprintLn("result := db.QueryRow((&buf).String(),args...)")
+	//TODO check and wrap sql.ErrNoRows
 	pw.fprintLn("return this.loadWithColumns(columnsToLoad,result)")
 	pw.deindent()
-	//TODO how to know if we got an insert or a select?
 	pw.fprintLn("}")
 
 	return nil

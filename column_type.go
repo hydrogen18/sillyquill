@@ -18,6 +18,7 @@ type ColumnTypeDefn struct {
 	InstanceName string
 	FieldName    string
 	Nullable     bool
+	Index        int
 }
 
 func privatizeTypeName(v string) string {
@@ -43,6 +44,7 @@ func NewColumnType(that *ColumnizedStruct) *ColumnType {
 		field := that.Fields[i]
 
 		defn := ColumnTypeDefn{}
+		defn.Index = i
 		defn.ColumnName = column.Name()
 		defn.FieldName = field.Name
 		defn.TypeName = fmt.Sprintf("%sColumn%s",
@@ -83,18 +85,19 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 	pw.fprintLn("type %s interface { ",
 		this.InterfaceName)
 	pw.indent()
-	pw.fprintLn(" Name() string")
-	pw.fprintLn(" PointerTo(m *%s) interface{}",
+	pw.fprintLn("Name() string")
+	pw.fprintLn("Index() int")
+	pw.fprintLn("PointerTo(m *%s) interface{}",
 		this.Parent.SingularModelName)
-	pw.fprintLn(" ValueOf(m *%s) interface{}",
+	pw.fprintLn("ValueOf(m *%s) interface{}",
 		this.Parent.SingularModelName)
-	pw.fprintLn(" SetLoaded(m *%s,isLoaded bool)",
+	pw.fprintLn("SetLoaded(m *%s,isLoaded bool)",
 		this.Parent.SingularModelName)
-	pw.fprintLn(" SetSet(m *%s,isSet bool)",
+	pw.fprintLn("SetSet(m *%s,isSet bool)",
 		this.Parent.SingularModelName)
-	pw.fprintLn(" IsLoaded(m *%s) bool",
+	pw.fprintLn("IsLoaded(m *%s) bool",
 		this.Parent.SingularModelName)
-	pw.fprintLn(" IsSet(m *%s) bool",
+	pw.fprintLn("IsSet(m *%s) bool",
 		this.Parent.SingularModelName)
 	pw.deindent()
 	pw.fprintLn("}")
@@ -190,6 +193,21 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 	pw.deindent()
 	pw.fprintLn("}")
 
+	//--Emit function to check for the presence of a column in the list
+	pw.fprintLn("func(this %s) Contains(c %s) bool {",
+		this.ListTypeName,
+		this.InterfaceName,
+	)
+	pw.indent()
+	pw.fprintLn("for _, v := range this {")
+	pw.indent()
+	pw.returnIf("v.Index() == c.Index()", "true")
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.fprintLn("return false")
+	pw.deindent()
+	pw.fprintLn("}")
+
 	//Create an instance of an anonymous struct with the plural
 	//name as the identifier
 	pw.fprintLn("var %s = struct {", this.Parent.PluralModelName)
@@ -226,6 +244,15 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 		)
 		pw.indent()
 		pw.fprintLn("return %q", defn.ColumnName)
+		pw.deindent()
+		pw.fprintLn("}")
+
+		//--
+		pw.fprintLn("func (%s) Index() int {",
+			defn.TypeName,
+		)
+		pw.indent()
+		pw.fprintLn("return %d", defn.Index)
 		pw.deindent()
 		pw.fprintLn("}")
 

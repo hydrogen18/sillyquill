@@ -66,11 +66,12 @@ func (this *InformationSchemaColumn) StringToSqlDataType(v string) (SqlDataType,
 		return SqlDate, nil
 	case "NUMERIC": //TODO handle variable precision on type
 		return SqlNumeric, nil
+	case "TIMESTAMP WITHOUT TIME ZONE", "TIMESTAMP":
+		//TIMESTAMP - timestamp without timezone
+		//TIMESTAMP WITHOUT TIME ZONE - timestamp without time zone
+		//TIMESTAMP WITH TIME ZONE - timestamp with time zone - unsupported
+		//TIMESTAMPTZ - timestamp with time zone - unsupported
 
-	}
-
-	//TODO handle timezones
-	if strings.HasPrefix(dataType, "TIMESTAMP") {
 		return SqlTimestamp, nil
 	}
 
