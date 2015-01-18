@@ -379,12 +379,7 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 		this.SingularModelName,
 		this.TheColumnType.InterfaceName,
 	)
-	pw.fprintLn("if len(columnsToLoad) == 0 {")
 	pw.indent()
-	pw.fprintLn("columnsToLoad = %s", this.TheColumnType.AllColumnsName)
-	pw.deindent()
-	pw.fprintLn("}")
-	//TODO check for id column type and append if not in the list
 
 	pw.fprintLn("idColumns, err := this.identifyingColumns()")
 	pw.returnIf("err != nil", "err")
@@ -399,9 +394,34 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.fprintLn("}") //end if
 	pw.deindent()
 	pw.fprintLn("}") //end for
-	pw.fprintLn("return this.findOrCreateColumnsWhere(db,idColumns,columnsToSave,columnsToLoad)")
-	//TODO clear IsSet
-	//TODO set IsLoaded
+
+	pw.fprintLn("if len(columnsToLoad) == 0 {") //Load all columns if not specified
+	pw.indent()
+	pw.fprintLn("columnsToLoad = %s", this.TheColumnType.AllColumnsName)
+	pw.deindent()
+	pw.fprintLn("} else {") //Load the columns specified plus those that are set
+	//This is mandatory because not all columns are unique and the find-or-create
+	//paradigm could return an object that is inconsistent with respect to
+	//the database if the row already exists
+	//TODO check for id column type and append if not in the list to load
+	//	Is this TODO really needed? The user can't reach this code point if the
+	//  object is not uniquely identifiable
+	pw.indent()
+	pw.fprintLn("columnsToLoad = append(columnsToLoad,columnsToSave...)")
+	pw.deindent()
+	pw.fprintLn("}")
+
+	pw.fprintLn("err = this.findOrCreateColumnsWhere(db,idColumns,columnsToSave,columnsToLoad)")
+	pw.fprintLn("if err == nil {")
+	pw.indent()
+	pw.fprintLn("%s(columnsToLoad).SetLoaded(this,true)",
+		this.TheColumnType.ListTypeName) //Set the columns that are loaded
+	pw.fprintLn("%s(columnsToLoad).SetSet(this,false)",
+		this.TheColumnType.ListTypeName) //Clear the flags for columns that are
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.fprintLn("return err")
+	pw.deindent()
 	pw.fprintLn("}")
 
 	return nil
