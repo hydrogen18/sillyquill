@@ -158,6 +158,11 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 
 	emitters = append(emitters, columnLoader)
 
+	columnSaver := NewColumnSaverFor(columnizedStruct,
+		columnType)
+
+	emitters = append(emitters, columnSaver)
+
 	pw.fprintLn("package %s", this.Package)
 
 	imports := make(map[string]int)
