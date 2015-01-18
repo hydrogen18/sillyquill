@@ -198,9 +198,20 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 			column.Name())
 	}
 	pw.deindent()
+	pw.fprintLn("}") //close IsLoaded nested struct
+
+	//--Emit a nested struct that has a boolean indicating
+	//if each column is set
+	pw.fprintLn("IsSet struct {")
+	for i, field := range this.Fields {
+		column := this.Columns[i]
+		pw.fprintLn("%s bool //Column:%s",
+			field.Name,
+			column.Name())
+	}
 	pw.fprintLn("}")
 	pw.deindent()
-	pw.fprintLn("}")
+	pw.fprintLn("}") //close struct
 	pw.fprintLn("")
 	//--Emit a type definition for a list of the model type
 	pw.fprintLn("type %s []%s", this.ListTypeName, this.SingularModelName)
@@ -248,42 +259,81 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.deindent()
 	pw.fprintLn("}")
 
-	//--Emit an accessor for field of the struct
-	for i, field := range this.Fields {
-		pw.fprintLn("func (this *%s) Get%s(db *sql.DB) (%s, error) {",
+	//--Emit an accessor to load multiple fields of the struct
+	pw.fprintLn("func (this *%s) Reload(db *sql.DB, columns ...%s) error {",
+		this.SingularModelName,
+		this.TheColumnType.InterfaceName,
+	)
+	pw.indent()
+	pw.fprintLn("if len(columns) == 0 {")
+	pw.indent()
+	pw.fprintLn("columns = %s", this.TheColumnType.AllColumnsName)
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.fprintLn("idColumns, err := this.identifyingColumns()")
+	pw.returnIf("err != nil", "err")
+	pw.fprintLn("err = this.loadColumnsWhere(db,idColumns,columns...)")
+	pw.returnIf("err != nil", "err")
+	pw.fprintLn("%s(columns).SetLoaded(this,true)",
+		this.TheColumnType.ListTypeName)
+	pw.fprintLn("return nil")
+	pw.deindent()
+	pw.fprintLn("}")
+
+	//--Emit an accessor to load multiple fields of the struct
+	//if not already loaded
+	pw.fprintLn("func (this *%s) Get(db *sql.DB, columns ...%s) error {",
+		this.SingularModelName,
+		this.TheColumnType.InterfaceName,
+	)
+	pw.indent()
+	pw.fprintLn("if len(columns) == 0 {")
+	pw.indent()
+	pw.fprintLn("columns = %s", this.TheColumnType.AllColumnsName)
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.fprintLn("var unloadedColumns []%s", this.TheColumnType.InterfaceName)
+	pw.fprintLn("for _, v := range columns {")
+	pw.indent()
+	pw.fprintLn("if ! v.IsLoaded(this) {")
+	pw.indent()
+	pw.fprintLn("unloadedColumns = append(unloadedColumns,v)")
+	pw.deindent()
+	pw.fprintLn("}") //end if
+	pw.deindent()
+	pw.fprintLn("}") //end for
+	pw.returnIf("len(unloadedColumns) == 0", "nil")
+	pw.fprintLn("return this.Reload(db,unloadedColumns...)")
+	pw.deindent()
+	pw.fprintLn("}")
+
+	//--Emit a setter for each field of the struct
+	for _, field := range this.Fields {
+		pw.fprintLn("func (this *%s) Set%s(v %s) {",
 			this.SingularModelName,
 			field.Name,
 			field.DataType)
 		pw.indent()
-		pw.fprintLn("if this.IsLoaded.%s {", field.Name)
-		pw.indent()
-		pw.fprintLn("return this.%s, nil", field.Name)
-		pw.deindent()
-		pw.fprintLn("}")
-
-		pw.fprintLn("columns, err := this.identifyingColumns()")
-		pw.fprintLn("if err != nil {")
-		pw.indent()
-		pw.fprintLn("return this.%s, err", field.Name)
-		pw.deindent()
-		pw.fprintLn("}")
-
-		pw.fprintLn("return this.%s, this.loadColumnsWhere(db,columns,%s)",
-			field.Name,
-			this.TheColumnType.Defns[i].InstanceName)
+		pw.fprintLn("this.%s = v", field.Name)
+		pw.fprintLn("this.IsSet.%s = true", field.Name)
 		pw.deindent()
 		pw.fprintLn("}")
 		pw.fprintLn("")
 	}
 
+	//--Emit a save function
+
+	//pw.fprintLn("func (this *%s) Save() error")
+
 	return nil
 }
 
 type ColumnType struct {
-	InterfaceName string
-	ListTypeName  string
-	Defns         []ColumnTypeDefn
-	Parent        *ColumnizedStruct
+	InterfaceName  string
+	ListTypeName   string
+	Defns          []ColumnTypeDefn
+	Parent         *ColumnizedStruct
+	AllColumnsName string
 }
 
 type ColumnTypeDefn struct {
@@ -305,6 +355,7 @@ func NewColumnType(that *ColumnizedStruct) *ColumnType {
 	this.Parent = that
 	this.InterfaceName = fmt.Sprintf("%sColumn", that.SingularModelName)
 	this.ListTypeName = fmt.Sprintf("%sColumnList", that.SingularModelName)
+	this.AllColumnsName = fmt.Sprintf("%sColumns", that.PluralModelName)
 	spicelog.Infof("Model %q column type %q",
 		that.SingularModelName,
 		this.InterfaceName)
@@ -317,8 +368,9 @@ func NewColumnType(that *ColumnizedStruct) *ColumnType {
 		defn.TypeName = fmt.Sprintf("%sColumn%s",
 			privatizeTypeName(that.SingularModelName),
 			field.Name)
-		defn.InstanceName = fmt.Sprintf("%sColumn%s",
-			that.SingularModelName,
+
+		defn.InstanceName = fmt.Sprintf("%s.%s",
+			that.PluralModelName,
 			field.Name,
 		)
 		defn.Nullable = column.Nullable()
@@ -353,6 +405,8 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 	pw.fprintLn(" ValueOf(m *%s) interface{}",
 		this.Parent.SingularModelName)
 	pw.fprintLn(" SetLoaded(m *%s,isLoaded bool)",
+		this.Parent.SingularModelName)
+	pw.fprintLn(" IsLoaded(m *%s) bool",
 		this.Parent.SingularModelName)
 	pw.deindent()
 	pw.fprintLn("}")
@@ -431,11 +485,36 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 	pw.deindent()
 	pw.fprintLn("}")
 
+	//Create an instance of an anonymous struct with the plural
+	//name as the identifier
+	pw.fprintLn("var %s = struct {", this.Parent.PluralModelName)
+	pw.indent()
+	for _, defn := range this.Defns {
+		pw.fprintLn("%s %s", defn.FieldName, this.InterfaceName)
+	}
+	pw.deindent()
+	pw.fprintLn("}{")
+	pw.indent()
+	//--Emit instantiation of a singleton of each column type
+	//as the members
+	for _, defn := range this.Defns {
+		pw.fprintLn("%s : new(%s),", defn.FieldName, defn.TypeName)
+	}
+	pw.deindent()
+	pw.fprintLn("}")
+
+	//Create a list that is all the column types
+	pw.fprintLn("var %s = []%s{", this.AllColumnsName, this.InterfaceName)
+	for _, defn := range this.Defns {
+		pw.indent()
+		pw.fprintLn("new(%s),", defn.TypeName)
+		pw.deindent()
+	}
+	pw.fprintLn("}")
+
 	for _, defn := range this.Defns {
 		//--Emit type definition for each column. The value is meaningless
 		pw.fprintLn("type %s int", defn.TypeName)
-		//--Emit instantiation of a singleton of each column type
-		pw.fprintLn("var %s = new(%s)", defn.InstanceName, defn.TypeName)
 		//--
 		pw.fprintLn("func (%s) Name() string {",
 			defn.TypeName,
@@ -444,6 +523,18 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 		pw.fprintLn("return %q", defn.ColumnName)
 		pw.deindent()
 		pw.fprintLn("}")
+
+		//---
+
+		pw.fprintLn("func (%s) IsLoaded(m *%s) bool {",
+			defn.TypeName,
+			this.Parent.SingularModelName)
+		pw.indent()
+		pw.fprintLn("return m.IsLoaded.%s", defn.FieldName)
+		pw.deindent()
+		pw.fprintLn("}")
+		//---
+
 		//---
 
 		pw.fprintLn("func (%s) PointerTo(m *%s) interface{} {",
@@ -493,7 +584,8 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 
 	pw.indent()
 	for _, u := range this.Parent.Unique {
-		pw.fprintLn("if this.IsLoaded.%s {",
+		pw.fprintLn("if this.IsLoaded.%s || this.IsSet.%s {",
+			u.Name,
 			u.Name)
 		pw.indent()
 		pw.fprintLn("return %s{%s}, nil",
@@ -508,7 +600,7 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 		var pkLoaded []string
 		for _, pk := range this.Parent.PrimaryKey {
 			pkLoaded = append(pkLoaded,
-				fmt.Sprintf("this.IsLoaded.%s", pk.Name))
+				fmt.Sprintf("(this.IsLoaded.%s || this.IsSet.%s)", pk.Name, pk.Name))
 		}
 
 		pw.fprintLn("if %s {",

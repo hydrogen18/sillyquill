@@ -70,7 +70,6 @@ func (this *ColumnLoader) Emit(pw *panicWriter) error {
 
 	//--Emit a receiver that loads a list of columns
 	//from a Scanner like sql.Rows
-
 	pw.fprintLn("func (this *%s) %s(columns %s, scanner sillyquill_rt.Scanner) error {",
 		this.TheColumnizedStruct.SingularModelName,
 		this.LoadWithColumnsReceiverName,

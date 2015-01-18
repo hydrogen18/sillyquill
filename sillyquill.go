@@ -266,7 +266,7 @@ func main() {
 	db, err := sql.Open("postgres", dbconfig)
 	db.SetMaxOpenConns(16)
 	if err != nil {
-		spicelog.Fatalf("%v", err)
+		spicelog.Fatalf("%v", err) 
 	}
 	defer db.Close()
 
