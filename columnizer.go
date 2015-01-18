@@ -29,6 +29,8 @@ type ColumnizedStruct struct {
 	PrimaryKey        []ColumnizedField
 	Unique            []ColumnizedField
 	PreferredUnique   *ColumnizedField
+	UpdatedAt         *ColumnizedField
+	CreatedAt         *ColumnizedField
 	TableName         string
 
 	TheColumnType *ColumnType
@@ -104,6 +106,14 @@ func NewColumnizedStruct(t Table,
 		_, ok = primaryKeys[column.Name()]
 		if ok {
 			this.PrimaryKey = append(this.PrimaryKey, field)
+		}
+
+		if column.IsCreationTimestamp() {
+			this.CreatedAt = &field
+		}
+
+		if column.IsUpdateTimestamp() {
+			this.UpdatedAt = &field
 		}
 	}
 
@@ -372,11 +382,53 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 		pw.fprintLn("")
 	}
 
+	if this.UpdatedAt != nil {
+		//--Emit a function to set updated_at style column if not set
+		pw.fprintLn("func (this *%s) touchUpdatedAt() {", this.SingularModelName)
+		pw.indent()
+		pw.fprintLn("if ! this.IsSet.%s { ", this.UpdatedAt.Name)
+		pw.indent()
+		pw.fprintLn("now := time.Now()")
+		if this.UpdatedAt.Pointer {
+			pw.fprintLn("this.Set%s(&now)", this.UpdatedAt.Name)
+		} else {
+			pw.fprintLn("this.Set%s(now)", this.UpdatedAt.Name)
+		}
+		pw.deindent()
+		pw.fprintLn("}")
+		pw.deindent()
+		pw.fprintLn("}")
+	}
+
+	if this.CreatedAt != nil {
+		//--Emit a function to set created_at style column if not set or loaded
+		pw.fprintLn("func (this *%s) touchCreatedAt() {", this.SingularModelName)
+		pw.indent()
+		pw.fprintLn("if ! this.IsLoaded.%s || ! this.IsSet.%s { ",
+			this.CreatedAt.Name,
+			this.CreatedAt.Name)
+		pw.indent()
+		pw.fprintLn("now := time.Now()")
+		if this.CreatedAt.Pointer {
+			pw.fprintLn("this.Set%s(&now)", this.CreatedAt.Name)
+		} else {
+			pw.fprintLn("this.Set%s(now)", this.CreatedAt.Name)
+		}
+		pw.deindent()
+		pw.fprintLn("}")
+		pw.deindent()
+		pw.fprintLn("}")
+	}
+
 	//--Emit a save function
-	//TODO check if table has an "updated_at" style column and
+
 	//call SetUpdatedAt(time.Now()) if not already set
 	pw.fprintLn("func (this *%s) Save(db *sql.DB) error {", this.SingularModelName)
 	pw.indent()
+	//check if table has an "updated_at" style column and
+	if this.UpdatedAt != nil {
+		pw.fprintLn("this.touchUpdatedAt()")
+	}
 	pw.fprintLn("idColumns, err := this.identifyingColumns()")
 	pw.returnIf("err != nil", "err")
 	pw.fprintLn("var columnsToSave %s", this.TheColumnType.ListTypeName)
@@ -401,9 +453,12 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.fprintLn("}")
 
 	//--Emit a create function
-	//TODO check for "created_at" style column
 	pw.fprintLn("func (this *%s) Create(db *sql.DB) error {", this.SingularModelName)
 	pw.indent()
+	//check for "created_at" style column
+	if this.CreatedAt != nil {
+		pw.fprintLn("this.touchCreatedAt()")
+	}
 	pw.fprintLn("var columnsToCreate %s", this.TheColumnType.ListTypeName)
 	pw.fprintLn("for _, v := range %s {", this.TheColumnType.AllColumnsName)
 	pw.indent()
@@ -441,13 +496,16 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.fprintLn("}")
 
 	//--Emit a FindOrCreate function
-	//TODO check for "created_at" style column
+
 	pw.fprintLn("func (this *%s) FindOrCreate(db *sql.DB, columnsToLoad ...%s) error {",
 		this.SingularModelName,
 		this.TheColumnType.InterfaceName,
 	)
 	pw.indent()
-
+	//check for "created_at" style column
+	if this.CreatedAt != nil {
+		pw.fprintLn("this.touchCreatedAt()")
+	}
 	pw.fprintLn("idColumns, err := this.identifyingColumns()")
 	pw.returnIf("err != nil", "err")
 

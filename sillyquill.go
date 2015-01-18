@@ -86,6 +86,8 @@ type Column interface {
 	DataType() SqlDataType
 	Name() string
 	Nullable() bool
+	IsCreationTimestamp() bool
+	IsUpdateTimestamp() bool
 }
 
 type InformationSchemaAdapter struct {
@@ -98,6 +100,14 @@ type InformationSchemaColumn struct {
 	dataType SqlDataType
 	nullable bool
 	parent   *InformationSchemaTable
+}
+
+func (this *InformationSchemaColumn) IsCreationTimestamp() bool {
+	return this.Name() == "created_at" && this.DataType() == SqlTimestamp
+}
+
+func (this *InformationSchemaColumn) IsUpdateTimestamp() bool {
+	return this.Name() == "updated_at" && this.DataType() == SqlTimestamp
 }
 
 func (this *InformationSchemaColumn) Name() string {
