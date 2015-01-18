@@ -223,7 +223,10 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.fprintLn(`(&buf).WriteString("%s{")`, this.SingularModelName)
 	for _, field := range this.Fields {
 
-		pw.fprintLn("if this.IsLoaded.%s {", field.Name)
+		pw.fprintLn("if this.IsLoaded.%s || this.IsSet.%s {",
+			field.Name,
+			field.Name,
+		)
 		pw.indent()
 
 		if field.DataTypeDefn[0] != reflect.Ptr {
@@ -318,6 +321,8 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	}
 
 	//--Emit a save function
+	//TODO check if table has an "updated_at" style column and
+	//call SetUpdatedAt(time.Now()) if not already set
 	pw.fprintLn("func (this *%s) Save(db *sql.DB) error {", this.SingularModelName)
 	pw.fprintLn("idColumns, err := this.identifyingColumns()")
 	pw.returnIf("err != nil", "err")
@@ -332,6 +337,22 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.deindent()
 	pw.fprintLn("}") //end for
 	pw.fprintLn("return this.updateColumnsWhere(db,idColumns,columnsToSave...)")
+	pw.fprintLn("}")
+
+	//--Emit a create function
+	//TODO check for "created_at" style column
+	pw.fprintLn("func (this *%s) Create(db *sql.DB) error {", this.SingularModelName)
+	pw.fprintLn("var columnsToCreate %s", this.TheColumnType.ListTypeName)
+	pw.fprintLn("for _, v := range %s {", this.TheColumnType.AllColumnsName)
+	pw.indent()
+	pw.fprintLn("if v.IsSet(this) {")
+	pw.indent()
+	pw.fprintLn("columnsToCreate = append(columnsToCreate, v)")
+	pw.deindent()
+	pw.fprintLn("}") //end if
+	pw.deindent()
+	pw.fprintLn("}") //end for
+	pw.fprintLn("return this.insertColumns(db,columnsToCreate...)")
 	pw.fprintLn("}")
 
 	return nil

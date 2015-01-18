@@ -20,3 +20,12 @@ func (this RowNotUniquelyIdentifiableError) Error() string {
 		this.Instance,
 		this.Instance)
 }
+
+type RowDoesNotExistError struct {
+	Instance interface{}
+}
+
+func (this RowDoesNotExistError) Error() string {
+	return fmt.Sprintf("Instance of type %T does not exist:%v", this.Instance,
+		this.Instance)
+}
