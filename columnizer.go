@@ -341,7 +341,7 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.fprintLn("if err == nil {")
 	pw.indent()
 	pw.fprintLn("columnsToSave.SetLoaded(this,true)")
-	//TODO clear IsSet
+	pw.fprintLn("columnsToSave.SetSet(this,false)")
 	pw.deindent()
 	pw.fprintLn("}")
 	pw.fprintLn("return err")
@@ -366,7 +366,7 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.fprintLn("if err == nil {")
 	pw.indent()
 	pw.fprintLn("columnsToCreate.SetLoaded(this,true)")
-	//TODO clear IsSet
+	pw.fprintLn("columnsToCreate.SetSet(this,false)")
 	pw.deindent()
 	pw.fprintLn("}")
 	pw.fprintLn("return err")

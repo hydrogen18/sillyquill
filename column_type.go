@@ -82,6 +82,8 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 		this.Parent.SingularModelName)
 	pw.fprintLn(" SetLoaded(m *%s,isLoaded bool)",
 		this.Parent.SingularModelName)
+	pw.fprintLn(" SetSet(m *%s,isSet bool)",
+		this.Parent.SingularModelName)
 	pw.fprintLn(" IsLoaded(m *%s) bool",
 		this.Parent.SingularModelName)
 	pw.fprintLn(" IsSet(m *%s) bool",
@@ -117,6 +119,23 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 	pw.fprintLn("for _, v := range this {")
 	pw.indent()
 	pw.fprintLn("v.SetLoaded(m,isLoaded)")
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.fprintLn("return")
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.fprintLn("")
+
+	//--Emit function to call SetSet on each element
+	pw.fprintLn("func(this %s) SetSet(m *%s,isSet bool)  {",
+		this.ListTypeName,
+		this.Parent.SingularModelName,
+	)
+	pw.indent()
+
+	pw.fprintLn("for _, v := range this {")
+	pw.indent()
+	pw.fprintLn("v.SetSet(m,isSet)")
 	pw.deindent()
 	pw.fprintLn("}")
 	pw.fprintLn("return")
@@ -256,6 +275,18 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 			this.Parent.SingularModelName)
 		pw.indent()
 		pw.fprintLn("m.IsLoaded.%s = v", defn.FieldName)
+		pw.deindent()
+		pw.fprintLn("}")
+
+		pw.fprintLn("")
+
+		//---
+
+		pw.fprintLn("func (%s) SetSet(m *%s, v bool) {",
+			defn.TypeName,
+			this.Parent.SingularModelName)
+		pw.indent()
+		pw.fprintLn("m.IsSet.%s = v", defn.FieldName)
 		pw.deindent()
 		pw.fprintLn("}")
 
