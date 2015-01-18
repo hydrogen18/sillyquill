@@ -24,6 +24,10 @@ func (this *ColumnSaver) Imports() []string {
 	}
 }
 
+func (this *ColumnSaver) Suffix() string {
+	return "_saver"
+}
+
 func (this *ColumnSaver) Emit(pw *panicWriter) error {
 	//--Emit a low level wrapper for UPDATE
 	pw.fprintLn("func (this *%s) updateColumnsWhere(db *sql.DB,where %s,columns ...%s) error {",

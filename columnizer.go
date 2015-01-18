@@ -9,6 +9,7 @@ import "time"
 type CodeEmitter interface {
 	Emit(*panicWriter) error
 	Imports() []string
+	Suffix() string
 }
 
 type ColumnizedField struct {
@@ -28,6 +29,10 @@ type ColumnizedStruct struct {
 	TableName         string
 
 	TheColumnType *ColumnType
+}
+
+func (this *ColumnizedStruct) Suffix() string {
+	return ""
 }
 
 func NewColumnizedStruct(t Table,
@@ -202,12 +207,14 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	//--Emit a nested struct that has a boolean indicating
 	//if each column is set
 	pw.fprintLn("IsSet struct {")
+	pw.indent()
 	for i, field := range this.Fields {
 		column := this.Columns[i]
 		pw.fprintLn("%s bool //Column:%s",
 			field.Name,
 			column.Name())
 	}
+	pw.deindent()
 	pw.fprintLn("}")
 	pw.deindent()
 	pw.fprintLn("}") //close struct

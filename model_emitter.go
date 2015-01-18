@@ -3,10 +3,12 @@ package main
 import "fmt"
 import "io"
 
-//import "github.com/spiceworks/spicelog"
+import "github.com/spiceworks/spicelog"
 import "reflect"
 import "time"
 import "strings"
+import "os"
+import "path/filepath"
 
 type ModelEmitter struct {
 	TableNameToCodeName  func(string) string
@@ -131,13 +133,43 @@ func tempModelNamer(v string) (string, string) {
 	return pluralName, singularName
 }
 
-func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
+func (this *ModelEmitter) writeToFile(emitter CodeEmitter, filename string) error {
+	w, err := os.OpenFile(filename,
+		os.O_CREATE|os.O_WRONLY|os.O_TRUNC,
+		0644)
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+	spicelog.Infof("Writing file %q", filename)
 	pw := &panicWriter{
 		Writer: w,
 		level:  0,
 		tab:    this.Tab,
 	}
-	var emitters []CodeEmitter
+
+	pw.fprintLn("package %s", this.Package)
+
+	imports := make(map[string]int)
+
+	emitterImports := emitter.Imports()
+	for _, v := range emitterImports {
+		imports[v] = 0
+	}
+
+	pw.fprintLn("")
+
+	for v, _ := range imports {
+		pw.fprintLn("import %q", v)
+	}
+	pw.fprintLn("")
+
+	err = emitter.Emit(pw)
+	return err
+}
+
+func (this *ModelEmitter) Emit(table Table, outputPath string) error {
+
 	columnizedStruct, err := NewColumnizedStruct(table,
 		tempModelNamer,
 		this.ColumnNameToCodeName,
@@ -146,46 +178,34 @@ func (this *ModelEmitter) Emit(table Table, w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	emitters = append(emitters, columnizedStruct)
 
 	columnType := NewColumnType(columnizedStruct)
 	columnizedStruct.TheColumnType = columnType
 
-	emitters = append(emitters, columnType)
-
 	columnLoader := NewColumnLoaderFor(columnizedStruct,
 		columnType)
-
-	emitters = append(emitters, columnLoader)
 
 	columnSaver := NewColumnSaverFor(columnizedStruct,
 		columnType)
 
-	emitters = append(emitters, columnSaver)
-
-	pw.fprintLn("package %s", this.Package)
-
-	imports := make(map[string]int)
-
-	for _, emitter := range emitters {
-		emitterImports := emitter.Imports()
-		for _, v := range emitterImports {
-			imports[v] = 0
-		}
-	}
-	pw.fprintLn("")
-
-	for v, _ := range imports {
-		pw.fprintLn("import %q", v)
-	}
-	pw.fprintLn("")
-
-	for _, emitter := range emitters {
-		err := emitter.Emit(pw)
+	for _, emitter := range []CodeEmitter{
+		columnizedStruct,
+		columnType,
+		columnLoader,
+		columnSaver,
+	} {
+		filename := fmt.Sprintf("%s%s.go",
+			columnizedStruct.TableName,
+			emitter.Suffix())
+		filename = filepath.Join(outputPath, filename)
+		err = this.writeToFile(emitter, filename)
 		if err != nil {
 			return err
 		}
 	}
+
+	_ = columnLoader
+	_ = columnSaver
 
 	return nil
 }

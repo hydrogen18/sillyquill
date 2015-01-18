@@ -26,6 +26,10 @@ func privatizeTypeName(v string) string {
 	return result
 }
 
+func (this *ColumnType) Suffix() string {
+	return "_columns"
+}
+
 func NewColumnType(that *ColumnizedStruct) *ColumnType {
 	this := new(ColumnType)
 	this.Parent = that
@@ -58,7 +62,11 @@ func NewColumnType(that *ColumnizedStruct) *ColumnType {
 }
 
 func (this *ColumnType) Imports() []string {
-	return nil
+	return []string{
+		"fmt",
+		"bytes",
+		"github.com/hydrogen18/sillyquill/rt",
+	}
 }
 
 func (this *ColumnType) ColumnTypeInstanceByFieldName(fieldName string) string {

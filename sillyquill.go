@@ -6,7 +6,6 @@ import _ "github.com/lib/pq"
 import "database/sql"
 import "fmt"
 import "strings"
-import "os"
 import "sync"
 
 type Table interface {
@@ -266,7 +265,7 @@ func main() {
 	db, err := sql.Open("postgres", dbconfig)
 	db.SetMaxOpenConns(16)
 	if err != nil {
-		spicelog.Fatalf("%v", err) 
+		spicelog.Fatalf("%v", err)
 	}
 	defer db.Close()
 
@@ -311,23 +310,11 @@ func main() {
 			me := NewModelEmitter()
 			me.Package = "dal"
 
-			fout, err := os.OpenFile(fmt.Sprintf("/home/ericu/sillyquill/src/dummy/dal/%s.go",
-				t.Name()),
-				os.O_TRUNC|os.O_WRONLY|os.O_CREATE,
-				0640)
-			if err != nil {
-				spicelog.Errorf("err:%v", err)
-			}
-
-			err = me.Emit(t, fout)
+			err = me.Emit(t, "/home/ericu/sillyquill/src/dummy/dal/")
 			if err != nil {
 				spicelog.Errorf("Error:%v", err)
 			}
 
-			err = fout.Close()
-			if err != nil {
-				spicelog.Fatalf("err:%v", err)
-			}
 		}(table)
 
 	}

@@ -26,8 +26,17 @@ func NewColumnLoaderFor(s *ColumnizedStruct,
 	return this
 }
 
+func (this *ColumnLoader) Suffix() string {
+	return "_loader"
+}
+
 func (this *ColumnLoader) Imports() []string {
-	return []string{"github.com/hydrogen18/sillyquill/rt"}
+	return []string{
+		"github.com/hydrogen18/sillyquill/rt",
+		"database/sql",
+		"bytes",
+		"fmt",
+	}
 }
 
 func (this *ColumnLoader) Emit(pw *panicWriter) error {
