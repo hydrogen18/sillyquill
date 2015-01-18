@@ -470,9 +470,8 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.deindent()
 	pw.fprintLn("}") //end for
 
-	// check for id-style column type and append if not in the list to load
-	//	Is this TODO really needed? The user can't reach this code point if the
-	//  object is not uniquely identifiable
+	//Check for id-style column type and append if not in the list to load
+	//This make sures that the result of the Create is identifiable.
 	pw.fprintLn("var columnsToLoad %s", this.TheColumnType.ListTypeName)
 	if this.PreferredUnique != nil {
 		instanceName := this.TheColumnType.ColumnTypeInstanceByFieldName(this.PreferredUnique.Name)
