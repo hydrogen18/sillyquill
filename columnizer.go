@@ -478,9 +478,10 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.deindent()
 	pw.fprintLn("}") //end for
 
+	pw.fprintLn("var columnsToLoad %s", this.TheColumnType.ListTypeName)
 	//Check for id-style column type and append if not in the list to load
 	//This make sures that the result of the Create is identifiable.
-	pw.fprintLn("var columnsToLoad %s", this.TheColumnType.ListTypeName)
+
 	if this.PreferredUnique != nil {
 		instanceName := this.TheColumnType.ColumnTypeInstanceByFieldName(this.PreferredUnique.Name)
 		pw.fprintLn("if ! columnsToLoad.Contains(%s) {",

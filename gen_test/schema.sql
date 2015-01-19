@@ -32,3 +32,9 @@ create table pizza_delivery_guys (
 	pizzas_delivered int,
 	PRIMARY KEY(name)
 ); 
+
+create table archive_files (
+	id serial unique,
+	name varchar not null,
+	data bytea not null
+);
