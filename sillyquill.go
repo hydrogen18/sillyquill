@@ -7,12 +7,18 @@ import "database/sql"
 import "sync"
 import "github.com/BurntSushi/toml"
 
+type table struct {
+	Exclude bool `toml:"exclude"`
+}
+
 type config struct {
 	DB            string `toml:"db"`
 	Schema        string `toml:"schema"`
 	OutputDir     string `toml:"output-dir"`
 	Package       string `toml:"package"`
 	ConnectionMax int    `toml:"connection-max"`
+
+	Tables map[string]table `oml:"tables"`
 }
 
 func main() {
@@ -44,8 +50,15 @@ func main() {
 
 	wg := new(sync.WaitGroup)
 	for _, table := range tables {
-
 		spicelog.Infof("Processing table %q", table.Name())
+
+		tableConf, ok := conf.Tables[table.Name()]
+		if ok {
+			if tableConf.Exclude {
+				spicelog.Infof("Skipping table %q", table.Name())
+				continue
+			}
+		}
 
 		wg.Add(1)
 		go func(t Table) {
@@ -60,7 +73,6 @@ func main() {
 			}
 
 		}(table)
-
 	}
 	wg.Wait()
 

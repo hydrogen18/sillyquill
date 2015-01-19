@@ -3,3 +3,7 @@ schema= "public"
 output-dir= "/home/ericu/sillyquill/src/dummy/dal"
 connection-max= 16
 package= "dal"
+
+[tables]
+	[tables.vendor_page_lists]
+	exclude = true
