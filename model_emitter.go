@@ -98,9 +98,17 @@ func (pw *panicWriter) printDataType(dt []interface{}) error {
 }
 
 func tempModelNamer(v string) (string, string) {
-	pluralName := UnderscoresToCamelCase(v)
+	name := UnderscoresToCamelCase(v)
 
-	singularName := pluralName[0 : len(pluralName)-1]
+	var pluralName string
+	var singularName string
+	if name[len(name)-1] == 's' {
+		pluralName = name
+		singularName = pluralName[0 : len(pluralName)-1]
+	} else {
+		singularName = name
+		pluralName = name + "s"
+	}
 
 	return pluralName, singularName
 }

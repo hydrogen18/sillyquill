@@ -1,0 +1,5 @@
+db= "user=skypal password=ismypal dbname=community-verification1 sslmode=disable host=verification-db1.spice.spiceworks.com"
+schema= "public"
+output-dir= "/home/ericu/sillyquill/src/dummy/dal"
+connection-max= 16
+package= "dal"
