@@ -18,6 +18,7 @@ type ColumnizedField struct {
 	DataType     string
 	SqlType      SqlDataType
 	Pointer      bool
+	Nullable     bool
 }
 
 type ColumnizedStruct struct {
@@ -90,7 +91,8 @@ func NewColumnizedStruct(t Table,
 			return nil, err
 		}
 
-		field.Pointer = column.Nullable()
+		field.Nullable = column.Nullable()
+		field.Pointer = field.DataTypeDefn[0] == reflect.Ptr
 
 		this.Fields = append(this.Fields, field)
 		spicelog.Infof("Table %q Column %q Field %q",
@@ -462,7 +464,7 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 		pw.fprintLn("this.touchCreatedAt()")
 	}
 	//check for "updated_at" style column that is declared non-null
-	if this.UpdatedAt != nil && !this.UpdatedAt.Pointer {
+	if this.UpdatedAt != nil && !this.UpdatedAt.Nullable {
 		pw.fprintLn("this.touchUpdatedAt()")
 	}
 	pw.fprintLn("var columnsToCreate %s", this.TheColumnType.ListTypeName)
@@ -513,7 +515,7 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 		pw.fprintLn("this.touchCreatedAt()")
 	}
 	//check for "updated_at" style column that is declared non-null
-	if this.UpdatedAt != nil && !this.UpdatedAt.Pointer {
+	if this.UpdatedAt != nil && !this.UpdatedAt.Nullable {
 		pw.fprintLn("this.touchUpdatedAt()")
 	}
 	pw.fprintLn("idColumns, err := this.identifyingColumns()")

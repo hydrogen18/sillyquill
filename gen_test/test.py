@@ -14,7 +14,7 @@ def get_env_or_exit(k):
         sys.exit(1)
     return v
 
-GOPATH = get_env_or_exit('GOPATH')
+GOPATH = get_env_or_exit('GOPATH') 
 PGHOST = get_env_or_exit('PGHOST')
 
 proc = subprocess.Popen(['go','install','github.com/hydrogen18/sillyquill'])
@@ -28,7 +28,7 @@ proc = subprocess.Popen(['psql','-c',sql,'postgres'])
 if proc.wait() != 0:
     sys.stdout.write("creating database failed\n")
     sys.exit(1) 
-
+ 
 passed = True 
 with open('schema.sql','rb') as fin:
     proc = subprocess.Popen(['psql',db_name],stdin = fin)
