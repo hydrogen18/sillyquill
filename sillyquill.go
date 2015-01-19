@@ -12,24 +12,25 @@ type table struct {
 }
 
 type config struct {
-	DB            string `toml:"db"`
-	Schema        string `toml:"schema"`
-	OutputDir     string `toml:"output-dir"`
-	Package       string `toml:"package"`
-	ConnectionMax int    `toml:"connection-max"`
-
-	Tables map[string]table `oml:"tables"`
+	DB            string           `toml:"db"`
+	Schema        string           `toml:"schema"`
+	OutputDir     string           `toml:"output-dir"`
+	Package       string           `toml:"package"`
+	ConnectionMax int              `toml:"connection-max"`
+	Tables        map[string]table `toml:"tables"`
 }
 
 func main() {
 	tomlFile := flag.String("conf", "sillyquill.toml", "TOML configuration file path")
 	flag.Parse()
+	defer spicelog.Stop()
 
 	var conf config
 	_, err := toml.DecodeFile(*tomlFile, &conf)
 	if err != nil {
 		spicelog.Fatalf("Failed parsing file %q:%v", *tomlFile, err)
 	}
+	spicelog.Infof("Parsed file %q", *tomlFile)
 
 	db, err := sql.Open("postgres", conf.DB)
 	if err != nil {
@@ -37,6 +38,11 @@ func main() {
 	}
 	defer db.Close()
 	db.SetMaxOpenConns(conf.ConnectionMax)
+
+	err = db.Ping()
+	if err != nil {
+		spicelog.Fatalf("Database unreachable:%v", err)
+	}
 
 	adapter := &InformationSchemaAdapter{
 		db:          db,
@@ -76,5 +82,4 @@ func main() {
 	}
 	wg.Wait()
 
-	spicelog.Stop()
 }
