@@ -406,7 +406,7 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 		//--Emit a function to set created_at style column if not set or loaded
 		pw.fprintLn("func (this *%s) touchCreatedAt() {", this.SingularModelName)
 		pw.indent()
-		pw.fprintLn("if ! this.IsLoaded.%s || ! this.IsSet.%s { ",
+		pw.fprintLn("if ! this.IsLoaded.%s && ! this.IsSet.%s { ",
 			this.CreatedAt.Name,
 			this.CreatedAt.Name)
 		pw.indent()
@@ -461,6 +461,10 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	if this.CreatedAt != nil {
 		pw.fprintLn("this.touchCreatedAt()")
 	}
+	//check for "updated_at" style column that is declared non-null
+	if this.UpdatedAt != nil && !this.UpdatedAt.Pointer {
+		pw.fprintLn("this.touchUpdatedAt()")
+	}
 	pw.fprintLn("var columnsToCreate %s", this.TheColumnType.ListTypeName)
 	pw.fprintLn("for _, v := range %s {", this.TheColumnType.AllColumnsName)
 	pw.indent()
@@ -506,6 +510,10 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	//check for "created_at" style column
 	if this.CreatedAt != nil {
 		pw.fprintLn("this.touchCreatedAt()")
+	}
+	//check for "updated_at" style column that is declared non-null
+	if this.UpdatedAt != nil && !this.UpdatedAt.Pointer {
+		pw.fprintLn("this.touchUpdatedAt()")
 	}
 	pw.fprintLn("idColumns, err := this.identifyingColumns()")
 	pw.returnIf("err != nil", "err")

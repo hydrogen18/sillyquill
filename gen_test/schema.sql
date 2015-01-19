@@ -4,7 +4,8 @@ create table trucks (
 	updated_at timestamp not null,
 	make varchar not null,
 	model varchar not null,
-	tonnage real not null
+	tonnage real not null,
+	PRIMARY KEY(make,model)
 );
 
 create table cars (
@@ -12,5 +13,6 @@ create table cars (
 	updated_at timestamp not null,
 	make varchar not null,
 	model varchar not null,
-	passengers smallint not null
+	passengers smallint not null,
+	PRIMARY KEY(make,model)
 );

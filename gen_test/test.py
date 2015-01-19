@@ -36,14 +36,14 @@ with open('schema.sql','rb') as fin:
         sys.stdout.write("creating schema failed\n") 
         passed = False
 
-if passed:
+if passed: 
     with tempfile.NamedTemporaryFile(mode='wb',bufsize=0,suffix='sillyquill.toml',delete=True) as fout:
         fout.write('db="')
-        fout.write('dbname=%s ' % db_name)
-        fout.write('sslmode=disable ')
+        fout.write('dbname=%s ' % db_name) 
+        fout.write('sslmode=disable ')  
         fout.write('"\n')
         
-        fout.write('schema="public"\n')
+        fout.write('schema="public"\n') 
         fout.write('package="dal"\n')
         output_dir = os.path.join(GOPATH,'src','github.com','hydrogen18','sillyquill','gen_test','dal')
         fout.write('output-dir="')
@@ -58,7 +58,10 @@ if passed:
             passed = False
 
 if passed:
-    proc = subprocess.Popen(['go','test','-v'])
+    db_config = "dbname=%s sslmode=disable" % db_name
+    proc_env = dict(os.environ)
+    proc_env['DB'] = db_config
+    proc = subprocess.Popen(['go','test','-v'],env=proc_env)  
     if proc.wait() != 0:
         sys.stdout.write("go test failed\n")
         passed = False
