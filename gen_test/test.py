@@ -37,6 +37,8 @@ with open('schema.sql','rb') as fin:
         passed = False
 
 if passed: 
+    #TODO remove all '.go' files in 'dal'
+    output_dir = os.path.join(GOPATH,'src','github.com','hydrogen18','sillyquill','gen_test','dal')
     with tempfile.NamedTemporaryFile(mode='wb',bufsize=0,suffix='sillyquill.toml',delete=True) as fout:
         fout.write('db="')
         fout.write('dbname=%s ' % db_name) 
@@ -45,7 +47,7 @@ if passed:
         
         fout.write('schema="public"\n') 
         fout.write('package="dal"\n')
-        output_dir = os.path.join(GOPATH,'src','github.com','hydrogen18','sillyquill','gen_test','dal')
+        
         fout.write('output-dir="')
         fout.write(output_dir)
         fout.write('"\n')

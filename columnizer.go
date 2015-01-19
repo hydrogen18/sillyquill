@@ -507,6 +507,7 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 		this.TheColumnType.InterfaceName,
 	)
 	pw.indent()
+	//TODO check for zero columns being set and return an error indicating such
 	//check for "created_at" style column
 	if this.CreatedAt != nil {
 		pw.fprintLn("this.touchCreatedAt()")

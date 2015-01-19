@@ -29,6 +29,55 @@ func (s *TestSuite) TearDownSuite(c *C) {
 	}
 }
 
+func (s *TestSuite) TestPizzaDeliveryGuys(c *C) {
+	aGuy := new(dal.PizzaDeliveryGuy)
+	aGuy.SetName("bob")
+	aGuy.SetGasMileage(16.4)
+	err := aGuy.FindOrCreate(s.db)
+	c.Assert(err, IsNil)
+
+	/**
+	err = aGuy.FindOrCreate(s.db)
+	c.Assert(err, Equals,NoColumnsSetError)
+	**/
+	//Test Reload
+	err = aGuy.Reload(s.db)
+	c.Assert(err, IsNil)
+
+	//Test find by primary key
+	sameGuy := new(dal.PizzaDeliveryGuy)
+	sameGuy.SetName(aGuy.Name)
+	err = sameGuy.FindOrCreate(s.db)
+	c.Assert(err, IsNil)
+
+	//Create another pizza delivery guy
+	secondGuy := new(dal.PizzaDeliveryGuy)
+	secondGuy.SetName("rufus")
+	secondGuy.SetGasMileage(36.0)
+	err = secondGuy.FindOrCreate(s.db)
+	c.Assert(err, IsNil)
+
+	//Test Save
+	aGuy.SetGasMileage(15.0)
+	err = aGuy.Save(s.db)
+	c.Assert(err, IsNil)
+
+	//Test save w/ no params
+	err = aGuy.Save(s.db)
+	c.Assert(err, IsNil)
+
+	err = aGuy.Reload(s.db)
+	c.Assert(err, IsNil)
+
+	err = secondGuy.Reload(s.db)
+	c.Assert(err, IsNil)
+
+	//Test for wild where clause in update
+	c.Assert(aGuy.GasMileage, Equals, 15.0)
+	c.Assert(aGuy.GasMileage, Not(Equals), secondGuy.GasMileage)
+
+}
+
 func (s *TestSuite) TestCreateCar(c *C) {
 	aCar := new(dal.Car)
 	aCar.SetMake("kia")

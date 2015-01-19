@@ -16,3 +16,19 @@ create table cars (
 	passengers smallint not null,
 	PRIMARY KEY(make,model)
 );
+
+create table incidents (
+	id bigserial,
+	created_at timestamp not null,
+	resolved_at timestamp,
+	resolution varchar,
+	reported_by varchar,
+	resolved_by varchar
+);
+
+create table pizza_delivery_guys (
+	name varchar,
+	gas_mileage double precision not null,
+	pizzas_delivered int,
+	PRIMARY KEY(name)
+); 
