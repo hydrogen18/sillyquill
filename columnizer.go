@@ -5,6 +5,7 @@ import "github.com/spiceworks/spicelog"
 import "reflect"
 import "bytes"
 import "time"
+import "github.com/hydrogen18/sillyquill/rt"
 
 type CodeEmitter interface {
 	Emit(*panicWriter) error
@@ -201,11 +202,15 @@ func (this *ColumnizedStruct) Imports() []string {
 			}
 
 			if kind == reflect.Struct {
-				_, ok := field.DataTypeDefn[i].(time.Time)
+				m := field.DataTypeDefn[i]
 				i++
-				if ok {
+				switch m.(type) {
+				case time.Time:
 					result = append(result, "time")
+				case sillyquill_rt.Numeric, sillyquill_rt.NullNumeric:
+					result = append(result, "github.com/hydrogen18/sillyquill/rt")
 				}
+
 			}
 
 		}

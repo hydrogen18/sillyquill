@@ -9,6 +9,7 @@ import "time"
 import "strings"
 import "os"
 import "path/filepath"
+import "github.com/hydrogen18/sillyquill/rt"
 
 type ModelEmitter struct {
 	TableNameToCodeName  func(string) string
@@ -193,8 +194,10 @@ func columnToDataType(c Column) []interface{} {
 
 	var stub []interface{}
 
+	var isPtr bool
 	if c.Nullable() {
 		stub = []interface{}{reflect.Ptr}
+		isPtr = true
 	}
 
 	switch dt {
@@ -202,7 +205,7 @@ func columnToDataType(c Column) []interface{} {
 		return append(stub, reflect.Int16)
 	case SqlInt:
 		return append(stub, reflect.Int32)
-	case SqlBigInt, SqlNumeric: //TODO fix this should use big.Int
+	case SqlBigInt:
 		return append(stub, reflect.Int64)
 	case SqlBoolean:
 		return append(stub, reflect.Bool)
@@ -216,6 +219,12 @@ func columnToDataType(c Column) []interface{} {
 		return append(stub, reflect.Slice, reflect.Uint8)
 	case SqlReal:
 		return append(stub, reflect.Float32)
+	case SqlNumeric:
+		if isPtr {
+			return append(stub, reflect.Struct, sillyquill_rt.NullNumeric{})
+		} else {
+			return append(stub, reflect.Struct, sillyquill_rt.Numeric{})
+		}
 	}
 
 	return nil

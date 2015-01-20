@@ -38,3 +38,14 @@ create table archive_files (
 	name varchar not null,
 	data bytea not null
 );
+
+create table numbers (
+	id serial unique,
+	value numeric not null
+);
+
+create table null_numbers (
+	id serial unique,
+	value numeric null,
+	title varchar not null
+);

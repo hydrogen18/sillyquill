@@ -4,6 +4,7 @@ import . "gopkg.in/check.v1"
 import "testing"
 import "database/sql"
 import "github.com/hydrogen18/sillyquill/gen_test/dal"
+import "github.com/hydrogen18/sillyquill/rt"
 import _ "github.com/lib/pq"
 import "os"
 import "time"
@@ -27,6 +28,52 @@ func (s *TestSuite) TearDownSuite(c *C) {
 	if s.db != nil {
 		s.db.Close()
 	}
+}
+
+func (s *TestSuite) TestNumeric(c *C) {
+	aNumber := new(dal.Number)
+	var v sillyquill_rt.Numeric
+	v.SetString("2632624.626332")
+	aNumber.SetValue(v)
+
+	err := aNumber.Create(s.db)
+	c.Assert(err, IsNil)
+	c.Assert(aNumber.IsLoaded.Id, Equals, true)
+
+	sameNumber := new(dal.Number)
+	sameNumber.SetId(aNumber.Id)
+	err = sameNumber.Get(s.db)
+	c.Assert(err, IsNil)
+	c.Assert(sameNumber.Value, DeepEquals, aNumber.Value)
+}
+
+func (s *TestSuite) TestNumericNull(c *C) {
+	nullNumber := new(dal.NullNumber)
+	nullNumber.SetTitle("mewo")
+	err := nullNumber.Create(s.db)
+	c.Assert(err, IsNil)
+
+	aNumber := new(dal.NullNumber)
+	var v sillyquill_rt.NullNumeric
+	aNumber.SetTitle("kitties")
+	v.SetString("135135.16136")
+	aNumber.SetValue(&v)
+
+	err = aNumber.Create(s.db)
+	c.Assert(err, IsNil)
+	c.Assert(aNumber.IsLoaded.Id, Equals, true)
+
+	sameNumber := new(dal.NullNumber)
+	sameNumber.SetId(aNumber.Id)
+	err = sameNumber.Get(s.db)
+	c.Assert(err, IsNil)
+	c.Assert(sameNumber.Value, DeepEquals, aNumber.Value)
+
+	sameNumber = new(dal.NullNumber)
+	sameNumber.SetId(nullNumber.Id)
+	err = sameNumber.Get(s.db)
+	c.Assert(err, IsNil)
+	c.Assert(sameNumber.Value, IsNil)
 }
 
 func (s *TestSuite) TestArchiveFiles(c *C) {

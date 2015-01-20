@@ -19,6 +19,7 @@ type ColumnTypeDefn struct {
 	FieldName    string
 	Nullable     bool
 	Index        int
+	DataType     SqlDataType
 }
 
 func privatizeTypeName(v string) string {
@@ -45,6 +46,7 @@ func NewColumnType(that *ColumnizedStruct) *ColumnType {
 
 		defn := ColumnTypeDefn{}
 		defn.Index = i
+		defn.DataType = column.DataType()
 		defn.ColumnName = column.Name()
 		defn.FieldName = field.Name
 		defn.TypeName = fmt.Sprintf("%sColumn%s",
@@ -293,7 +295,11 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 		if defn.Nullable {
 			pw.fprintLn("if m.%s != nil {", defn.FieldName)
 			pw.indent()
-			pw.fprintLn("return *m.%s", defn.FieldName)
+			if defn.DataType == SqlNumeric {
+				pw.fprintLn("return m.%s.String()", defn.FieldName)
+			} else {
+				pw.fprintLn("return *m.%s", defn.FieldName)
+			}
 			pw.deindent()
 			pw.fprintLn("}")
 			pw.fprintLn("return nil")

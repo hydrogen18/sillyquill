@@ -6,16 +6,16 @@ import random
 import tempfile
 from io import open
 sys.stdin.close()
-
+  
 def get_env_or_exit(k):
     v = os.environ.get(k)
     if v is None:
         sys.stdout.write("%s not set\n" % k)
-        sys.exit(1)
-    return v
+        sys.exit(1) 
+    return v 
 
 GOPATH = get_env_or_exit('GOPATH') 
-PGHOST = get_env_or_exit('PGHOST')
+PGHOST = get_env_or_exit('PGHOST')  
 
 proc = subprocess.Popen(['go','install','github.com/hydrogen18/sillyquill'])
 if proc.wait() != 0:
