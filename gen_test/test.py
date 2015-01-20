@@ -12,7 +12,7 @@ def get_env_or_exit(k):
     if v is None:
         sys.stdout.write("%s not set\n" % k)
         sys.exit(1) 
-    return v 
+    return v
 
 GOPATH = get_env_or_exit('GOPATH') 
 PGHOST = get_env_or_exit('PGHOST')  

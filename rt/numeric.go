@@ -30,11 +30,8 @@ func (this Numeric) Value() (driver.Value, error) {
 
 type NullNumeric Numeric
 
-func (this *NullNumeric) Value() (driver.Value, error) {
-	if this == nil {
-		return nil, nil
-	}
-	return Numeric(*this).Value()
+func (this NullNumeric) Value() (driver.Value, error) {
+	return Numeric(this).Value()
 }
 
 func (this *NullNumeric) Scan(src interface{}) error {

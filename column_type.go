@@ -295,11 +295,7 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 		if defn.Nullable {
 			pw.fprintLn("if m.%s != nil {", defn.FieldName)
 			pw.indent()
-			if defn.DataType == SqlNumeric {
-				pw.fprintLn("return m.%s.String()", defn.FieldName)
-			} else {
-				pw.fprintLn("return *m.%s", defn.FieldName)
-			}
+			pw.fprintLn("return *m.%s", defn.FieldName)
 			pw.deindent()
 			pw.fprintLn("}")
 			pw.fprintLn("return nil")
