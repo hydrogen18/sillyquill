@@ -71,32 +71,11 @@ func (this *ColumnSaver) Emit(pw *panicWriter) error {
 		this.TheColumnType.ListTypeName,
 	)
 	pw.indent()
-	pw.fprintLn("var buf bytes.Buffer")
-	pw.fprintLn(`(&buf).WriteString("INSERT INTO %s(")`, this.TheColumnizedStruct.TableName)
-	pw.fprintLn("for _, v := range columnsToSave {")
-	pw.indent()
-	pw.fprintLn(`fmt.Fprintf(&buf,"%%q,",v.Name())`)
-	pw.deindent()
-	pw.fprintLn("}")                            // end for
-	pw.fprintLn("(&buf).Truncate(buf.Len()-1)") //Remove trailing comma
-	pw.fprintLn(`(&buf).WriteString(") VALUES(")`)
-	pw.fprintLn("for i := range columnsToSave {")
-	pw.indent()
-	pw.fprintLn(`fmt.Fprintf(&buf,"$%%d,",i+1)`)
-	pw.deindent()
-	pw.fprintLn("}")                              // end for
-	pw.fprintLn("(&buf).Truncate(buf.Len() - 1)") //Remove trailing comma
-	pw.fprintLn(`(&buf).WriteRune(')')`)
-	pw.fprintLn(`(&buf).WriteString(" RETURNING ")`)
-	pw.fprintLn("for _, v := range columnsToLoad {")
-	pw.indent()
-	pw.fprintLn(`fmt.Fprintf(&buf,"%%q,",v.Name())`)
-	pw.deindent()
-	pw.fprintLn("}")                              //end for
-	pw.fprintLn("(&buf).Truncate(buf.Len() - 1)") //Remove trailing comma
-
+	pw.fprintLn("query := %s.BuildInsertQuery(%q,columnsToLoad.Names(),columnsToSave.Names())",
+		sillyquil_runtime_pkg_name,
+		this.TheColumnizedStruct.TableName)
 	pw.fprintLn("args := columnsToSave.ValuesOf(this)")
-	pw.fprintLn("result := db.QueryRow((&buf).String(),args...)")
+	pw.fprintLn("result := db.QueryRow(query,args...)")
 	pw.fprintLn("return this.loadWithColumns(columnsToLoad,result)")
 	pw.deindent()
 	pw.fprintLn("}")

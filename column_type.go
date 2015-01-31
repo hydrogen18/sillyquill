@@ -108,6 +108,20 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 	pw.fprintLn("")
 	//--Emit type definition for slice of column interface type
 	pw.fprintLn("type %s []%s", this.ListTypeName, this.InterfaceName)
+	//--Emit a function to return the names
+	pw.fprintLn("func(this %s) Names() []string {", this.ListTypeName)
+	pw.indent()
+	pw.fprintLn("var names []string")
+	pw.fprintLn("names = make([]string,len(this))")
+	pw.fprintLn("for i, v := range this {")
+	pw.indent()
+	pw.fprintLn("names[i] = v.Name()")
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.fprintLn("return names")
+	pw.deindent()
+	pw.fprintLn("}")
+
 	//--Emit function to call PointerTo on each element and return
 	//the result as a slice
 	pw.fprintLn("func(this %s) PointersTo(m *%s) []interface{} {",
