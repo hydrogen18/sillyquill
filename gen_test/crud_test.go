@@ -30,6 +30,23 @@ func (s *TestSuite) TearDownSuite(c *C) {
 	}
 }
 
+func (s *TestSuite) TestErrOnNonUniquelyIdentifiables(c *C) {
+	//This type can never be identified uniquely
+	i := new(dal.NotUniquelyIdentifiable)
+	i.SetAge(42)
+	i.SetId(44)
+
+	err := i.FindOrCreate(s.db)
+	c.Assert(err, FitsTypeOf, sillyquill_rt.RowNotUniquelyIdentifiableError{})
+
+	//This instance can not be identified uniquely
+	j := new(dal.Incident)
+	resolution := "MEOW"
+	j.SetResolution(&resolution)
+	err = j.FindOrCreate(s.db)
+	c.Assert(err, FitsTypeOf, sillyquill_rt.RowNotUniquelyIdentifiableError{})
+}
+
 func (s *TestSuite) TestNoOverwritingExistingFields(c *C) {
 	i := new(dal.Incident)
 	var resolution string

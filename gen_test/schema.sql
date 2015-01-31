@@ -49,3 +49,9 @@ create table null_numbers (
 	value numeric null,
 	title varchar not null
 );
+
+create table not_uniquely_identifiables (
+	id serial not null,
+	name varchar not null,
+	age int not null
+);
