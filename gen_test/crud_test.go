@@ -37,14 +37,23 @@ func (s *TestSuite) TestErrOnNonUniquelyIdentifiables(c *C) {
 	i.SetId(44)
 
 	err := i.FindOrCreate(s.db)
-	c.Assert(err, FitsTypeOf, sillyquill_rt.RowNotUniquelyIdentifiableError{})
+	c.Check(err, FitsTypeOf, sillyquill_rt.RowNotUniquelyIdentifiableError{})
+
+	//This could be made to work but doesn't because the created row
+	//would not be identifiable
+	err = i.Create(s.db)
+	c.Check(err, FitsTypeOf, sillyquill_rt.RowNotUniquelyIdentifiableError{})
 
 	//This instance can not be identified uniquely
 	j := new(dal.Incident)
 	resolution := "MEOW"
 	j.SetResolution(&resolution)
 	err = j.FindOrCreate(s.db)
-	c.Assert(err, FitsTypeOf, sillyquill_rt.RowNotUniquelyIdentifiableError{})
+	c.Check(err, FitsTypeOf, sillyquill_rt.RowNotUniquelyIdentifiableError{})
+
+	err = j.Create(s.db) //Should suceed because the ID column can be populated by the DB
+	c.Check(err, IsNil)
+	c.Assert(j.IsLoaded.Id, Equals, true)
 }
 
 func (s *TestSuite) TestNoOverwritingExistingFields(c *C) {
