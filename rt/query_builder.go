@@ -35,3 +35,18 @@ func BuildInsertQuery(
 
 	return buf.String()
 }
+
+func BuildUpdateQuery(
+	tableName string,
+	columns []string) string {
+	var buf bytes.Buffer
+	(&buf).WriteString("UPDATE ")
+	(&buf).WriteString(tableName)
+	(&buf).WriteString(" SET ")
+	for i, v := range columns {
+		fmt.Fprintf(&buf, "%q=$%d,", v, i+1)
+	}
+	(&buf).Truncate(buf.Len() - 1)
+
+	return buf.String()
+}

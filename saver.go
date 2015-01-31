@@ -34,20 +34,18 @@ func (this *ColumnSaver) Emit(pw *panicWriter) error {
 		this.TheColumnType.InterfaceName,
 	)
 	pw.indent()
-	pw.fprintLn("var buf bytes.Buffer")
-	pw.fprintLn(`(&buf).WriteString("UPDATE %s SET ")`, this.TheColumnizedStruct.TableName)
-	pw.fprintLn("for i, v := range columns {")
-	pw.indent()
-	pw.fprintLn(`fmt.Fprintf(&buf,"%%q=$%%d,",v.Name(),i+1)`)
-	pw.deindent()
-	pw.fprintLn("}") // end for
-	pw.fprintLn("(&buf).Truncate(buf.Len() - 1)")
-	pw.fprintLn(`(&buf).WriteString(" WHERE ")`)
-	pw.fprintLn("(&buf).WriteString(where.andEqualClauseOf(len(columns)+1))")
+	pw.fprintLn("query := %s.BuildUpdateQuery(%q,%s(columns).Names()) + ",
+		sillyquil_runtime_pkg_name,
+		this.TheColumnizedStruct.TableName,
+		this.TheColumnType.ListTypeName)
+	pw.fprintLn(`" WHERE " +`)
+	pw.fprintLn(`where.andEqualClauseOf(len(columns)+1)`)
+
 	pw.fprintLn("var args []interface{}")
 	pw.fprintLn("args = %s(columns).ValuesOf(this)", this.TheColumnType.ListTypeName)
 	pw.fprintLn("args = append(args,where.ValuesOf(this)...)")
-	pw.fprintLn("result, err := db.Exec((&buf).String(),args...)")
+
+	pw.fprintLn("result, err := db.Exec(query,args...)")
 	//check result.RowsAffected
 	pw.fprintLn("if err == nil {")
 	pw.indent()
