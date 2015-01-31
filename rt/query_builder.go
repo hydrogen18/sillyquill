@@ -4,49 +4,41 @@ import "bytes"
 import "fmt"
 
 func BuildInsertQuery(
+	w *bytes.Buffer,
 	tableName string,
 	loadColumnNames []string,
-	saveColumnNames []string) string {
-	var buf bytes.Buffer
-	(&buf).WriteString("INSERT INTO ")
-	(&buf).WriteString(tableName)
-	(&buf).WriteRune('(')
+	saveColumnNames []string) {
+	fmt.Fprint(w, "INSERT INTO ")
+	fmt.Fprint(w, tableName)
+	fmt.Fprint(w, "(")
 	for _, v := range saveColumnNames {
-		(&buf).WriteRune('"')
-		(&buf).WriteString(v)
-		(&buf).WriteRune('"')
-		(&buf).WriteRune(',')
+		fmt.Fprint(w, `"`, v, `",`)
 	}
-	(&buf).Truncate(buf.Len() - 1)
-	(&buf).WriteString(") VALUES(")
+	w.Truncate(w.Len() - 1)
+	fmt.Fprint(w, ") VALUES(")
 
 	for i := range saveColumnNames {
-		fmt.Fprintf(&buf, "$%d,", i+1)
+		fmt.Fprintf(w, "$%d,", i+1)
 	}
-	(&buf).Truncate(buf.Len() - 1)
-	(&buf).WriteString(") RETURNING ")
+	w.Truncate(w.Len() - 1)
+	fmt.Fprint(w, ") RETURNING ")
 	for _, v := range loadColumnNames {
-		(&buf).WriteRune('"')
-		(&buf).WriteString(v)
-		(&buf).WriteRune('"')
-		(&buf).WriteRune(',')
+		fmt.Fprint(w, `"`, v, `",`)
 	}
-	(&buf).Truncate(buf.Len() - 1)
-
-	return buf.String()
+	w.Truncate(w.Len() - 1)
 }
 
 func BuildUpdateQuery(
+	w *bytes.Buffer,
 	tableName string,
-	columns []string) string {
-	var buf bytes.Buffer
-	(&buf).WriteString("UPDATE ")
-	(&buf).WriteString(tableName)
-	(&buf).WriteString(" SET ")
-	for i, v := range columns {
-		fmt.Fprintf(&buf, "%q=$%d,", v, i+1)
-	}
-	(&buf).Truncate(buf.Len() - 1)
+	columns []string) {
 
-	return buf.String()
+	w.WriteString("UPDATE ")
+	w.WriteString(tableName)
+	w.WriteString(" SET ")
+	for i, v := range columns {
+		fmt.Fprintf(w, "%q=$%d,", v, i+1)
+	}
+	w.Truncate(w.Len() - 1)
+
 }

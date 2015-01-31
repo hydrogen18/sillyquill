@@ -34,18 +34,19 @@ func (this *ColumnSaver) Emit(pw *panicWriter) error {
 		this.TheColumnType.InterfaceName,
 	)
 	pw.indent()
-	pw.fprintLn("query := %s.BuildUpdateQuery(%q,%s(columns).Names()) + ",
+	pw.fprintLn("var buf bytes.Buffer")
+	pw.fprintLn("%s.BuildUpdateQuery(&buf, %q,%s(columns).Names())",
 		sillyquil_runtime_pkg_name,
 		this.TheColumnizedStruct.TableName,
 		this.TheColumnType.ListTypeName)
-	pw.fprintLn(`" WHERE " +`)
-	pw.fprintLn(`where.andEqualClauseOf(len(columns)+1)`)
+	pw.fprintLn(`(&buf).WriteString(" WHERE ")`)
+	pw.fprintLn(`(&buf).WriteString(where.andEqualClauseOf(len(columns)+1))`)
 
 	pw.fprintLn("var args []interface{}")
 	pw.fprintLn("args = %s(columns).ValuesOf(this)", this.TheColumnType.ListTypeName)
 	pw.fprintLn("args = append(args,where.ValuesOf(this)...)")
 
-	pw.fprintLn("result, err := db.Exec(query,args...)")
+	pw.fprintLn("result, err := db.Exec((&buf).String(),args...)")
 	//check result.RowsAffected
 	pw.fprintLn("if err == nil {")
 	pw.indent()
@@ -69,11 +70,12 @@ func (this *ColumnSaver) Emit(pw *panicWriter) error {
 		this.TheColumnType.ListTypeName,
 	)
 	pw.indent()
-	pw.fprintLn("query := %s.BuildInsertQuery(%q,columnsToLoad.Names(),columnsToSave.Names())",
+	pw.fprintLn("var buf bytes.Buffer")
+	pw.fprintLn("%s.BuildInsertQuery(&buf,%q,columnsToLoad.Names(),columnsToSave.Names())",
 		sillyquil_runtime_pkg_name,
 		this.TheColumnizedStruct.TableName)
 	pw.fprintLn("args := columnsToSave.ValuesOf(this)")
-	pw.fprintLn("result := db.QueryRow(query,args...)")
+	pw.fprintLn("result := db.QueryRow((&buf).String(),args...)")
 	pw.fprintLn("return this.loadWithColumns(columnsToLoad,result)")
 	pw.deindent()
 	pw.fprintLn("}")
