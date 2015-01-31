@@ -18,7 +18,7 @@ create table cars (
 );
 
 create table incidents (
-	id bigserial,
+	id bigserial unique,
 	created_at timestamp not null,
 	resolved_at timestamp,
 	resolution varchar,

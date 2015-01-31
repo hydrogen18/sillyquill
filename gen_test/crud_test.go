@@ -30,6 +30,29 @@ func (s *TestSuite) TearDownSuite(c *C) {
 	}
 }
 
+func (s *TestSuite) TestNoOverwritingExistingFields(c *C) {
+	i := new(dal.Incident)
+	var resolution string
+	resolution = "PEBKAC"
+	i.SetResolution(&resolution)
+
+	err := i.Create(s.db)
+	c.Assert(err, IsNil)
+	c.Assert(i.IsLoaded.Id, Equals, true)
+
+	j := new(dal.Incident)
+	j.SetId(i.Id)
+	var notTheResolution string
+	notTheResolution = "fatality"
+	j.SetResolution(&notTheResolution)
+	err = j.FindOrCreate(s.db)
+	c.Assert(err, IsNil)
+
+	c.Assert(j.IsLoaded.Resolution, Equals, true)
+	c.Assert(*j.Resolution, Equals, *i.Resolution)
+
+}
+
 func (s *TestSuite) TestNumeric(c *C) {
 	aNumber := new(dal.Number)
 	var v sillyquill_rt.Numeric
