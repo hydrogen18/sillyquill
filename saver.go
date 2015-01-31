@@ -1,7 +1,5 @@
 package main
 
-//import "fmt"
-
 type ColumnSaver struct {
 	TheColumnType       *ColumnType
 	TheColumnizedStruct *ColumnizedStruct
@@ -74,7 +72,7 @@ func (this *ColumnSaver) Emit(pw *panicWriter) error {
 	)
 	pw.indent()
 	pw.fprintLn("var buf bytes.Buffer")
-	pw.fprintLn(`(&buf).WriteString("INSERT INTO %s ( ")`, this.TheColumnizedStruct.TableName)
+	pw.fprintLn(`(&buf).WriteString("INSERT INTO %s(")`, this.TheColumnizedStruct.TableName)
 	pw.fprintLn("for _, v := range columnsToSave {")
 	pw.indent()
 	pw.fprintLn(`fmt.Fprintf(&buf,"%%q,",v.Name())`)
@@ -111,7 +109,7 @@ func (this *ColumnSaver) Emit(pw *panicWriter) error {
 	pw.indent()
 	pw.fprintLn("var buf bytes.Buffer")
 
-	pw.fprintLn(`(&buf).WriteString("With extant_row AS ( SELECT ")`)
+	pw.fprintLn(`(&buf).WriteString("With extant_row AS (SELECT ")`)
 	pw.fprintLn("for _, v := range columnsToLoad {")
 	pw.indent()
 	pw.fprintLn(`fmt.Fprintf(&buf,"%%q,",v.Name())`)

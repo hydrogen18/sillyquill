@@ -5,11 +5,12 @@ import "strings"
 import "github.com/spiceworks/spicelog"
 
 type ColumnType struct {
-	InterfaceName  string
-	ListTypeName   string
-	Defns          []ColumnTypeDefn
-	Parent         *ColumnizedStruct
-	AllColumnsName string
+	InterfaceName         string
+	ListTypeName          string
+	Defns                 []ColumnTypeDefn
+	Parent                *ColumnizedStruct
+	AllColumnsName        string
+	PrimaryKeyColumnsName string
 }
 
 type ColumnTypeDefn struct {
@@ -38,6 +39,7 @@ func NewColumnType(that *ColumnizedStruct) *ColumnType {
 	this.InterfaceName = fmt.Sprintf("%sColumn", that.SingularModelName)
 	this.ListTypeName = fmt.Sprintf("%sColumnList", that.SingularModelName)
 	this.AllColumnsName = fmt.Sprintf("%sColumns", that.PluralModelName)
+	this.PrimaryKeyColumnsName = fmt.Sprintf("%sPrimaryKeyColumns", that.PluralModelName)
 	spicelog.Infof("Model %q column type %q",
 		that.SingularModelName,
 		this.InterfaceName)
@@ -330,6 +332,18 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 		pw.fprintLn("")
 	}
 
+	//--Emit a slice that is the primary keys for this table
+	pw.fprintLn("var %s = %s{",
+		this.PrimaryKeyColumnsName,
+		this.ListTypeName)
+	pw.indent()
+	for _, pk := range this.Parent.PrimaryKey {
+		pw.fprintLn("%s,", this.ColumnTypeInstanceByFieldName(pk.Name))
+	}
+
+	pw.deindent()
+	pw.fprintLn("}")
+
 	//--Emit a receiver that returns the minimum set of identifying columns
 	//for the type
 	pw.fprintLn("func (this %s) identifyingColumns() (%s, error) {",
@@ -361,13 +375,7 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 		pw.fprintLn("if %s {",
 			strings.Join(pkLoaded, " && "))
 		pw.indent()
-		pw.fprintLn("return %s{", this.ListTypeName)
-
-		for _, pk := range this.Parent.PrimaryKey {
-			pw.fprintLn("%s,", this.ColumnTypeInstanceByFieldName(pk.Name))
-		}
-
-		pw.fprintLn("}, nil")
+		pw.fprintLn("return %s, nil", this.PrimaryKeyColumnsName)
 		pw.deindent()
 		pw.fprintLn("}")
 	}

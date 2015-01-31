@@ -31,12 +31,37 @@ func (s *TestSuite) TearDownSuite(c *C) {
 }
 
 func (s *TestSuite) TestErrOnNonUniquelyIdentifiables(c *C) {
+	var err error
+	pdg := new(dal.PizzaDeliveryGuy)
+	pdg.SetName("Bob the pizza delivery guy")
+	pdg.SetGasMileage(15.0)
+	err = pdg.Create(s.db) //Column is uniquely identifiable by primary key
+	c.Check(err, IsNil)
+	c.Check(pdg.IsLoaded.GasMileage, Equals, true)
+	c.Check(pdg.IsLoaded.Name, Equals, true)
+
+	//This instance can not be identified uniquely
+	j := new(dal.Incident)
+	resolution := "MEOW"
+	j.SetResolution(&resolution)
+	err = j.FindOrCreate(s.db)
+	c.Check(err, DeepEquals, sillyquill_rt.RowNotUniquelyIdentifiableError{
+		Instance: *j,
+	})
+
+	err = j.Create(s.db) //Should suceed because the ID column can be populated by the DB
+	c.Check(err, IsNil)
+	c.Check(j.Id, Not(Equals), int64(0))
+	c.Check(j.IsLoaded.Id, Equals, true) //Loaded automatically
+	c.Check(j.IsLoaded.Resolution, Equals, true)
+	c.Check(j.IsLoaded.ReportedBy, Equals, false)
+
 	//This type can never be identified uniquely
 	i := new(dal.NotUniquelyIdentifiable)
 	i.SetAge(42)
 	i.SetId(44)
 
-	err := i.FindOrCreate(s.db)
+	err = i.FindOrCreate(s.db)
 	c.Check(err, FitsTypeOf, sillyquill_rt.RowNotUniquelyIdentifiableError{})
 
 	//This could be made to work but doesn't because the created row
@@ -44,16 +69,6 @@ func (s *TestSuite) TestErrOnNonUniquelyIdentifiables(c *C) {
 	err = i.Create(s.db)
 	c.Check(err, FitsTypeOf, sillyquill_rt.RowNotUniquelyIdentifiableError{})
 
-	//This instance can not be identified uniquely
-	j := new(dal.Incident)
-	resolution := "MEOW"
-	j.SetResolution(&resolution)
-	err = j.FindOrCreate(s.db)
-	c.Check(err, FitsTypeOf, sillyquill_rt.RowNotUniquelyIdentifiableError{})
-
-	err = j.Create(s.db) //Should suceed because the ID column can be populated by the DB
-	c.Check(err, IsNil)
-	c.Assert(j.IsLoaded.Id, Equals, true)
 }
 
 func (s *TestSuite) TestNoOverwritingExistingFields(c *C) {

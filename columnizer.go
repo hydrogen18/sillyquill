@@ -187,6 +187,7 @@ func (this *ColumnizedStruct) Imports() []string {
 	result = append(result, "bytes")
 	result = append(result, "fmt")
 	result = append(result, "database/sql")
+	result = append(result, "github.com/hydrogen18/sillyquill/rt")
 	for _, field := range this.Fields {
 		var i int
 		kind, ok := field.DataTypeDefn[i].(reflect.Kind)
@@ -220,6 +221,10 @@ func (this *ColumnizedStruct) Imports() []string {
 }
 
 func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
+	//--Supress imported and not used
+
+	pw.fprintLn("var _ = %s.Numeric{}", sillyquil_runtime_pkg_name)
+
 	//--Emit a definition of the model
 	pw.fprintLn("type %s struct {",
 		this.SingularModelName)
@@ -484,10 +489,15 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.fprintLn("}") //end for
 
 	pw.fprintLn("var columnsToLoad %s", this.TheColumnType.ListTypeName)
-	//Check for id-style column type and append if not in the list to load
-	//This make sures that the result of the Create is identifiable.
 
-	if this.PreferredUnique != nil {
+	//Always load columns back from the database after an insert that
+	//uniquely identify the row that is created.
+	//This make sures that the result of the Create is identifiable
+	//for future update queries.
+	//The preferred method is using a UNIQUE column. This only works if
+	//the column is populated by the database (SERIAL, BIGSERIAL, etc.)
+	//or if the column is set by the user
+	if this.PreferredUnique != nil { //TODO check for column being SERIAL
 		instanceName := this.TheColumnType.ColumnTypeInstanceByFieldName(this.PreferredUnique.Name)
 		pw.fprintLn("if ! columnsToLoad.Contains(%s) {",
 			instanceName)
@@ -495,6 +505,17 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 		pw.fprintLn("columnsToLoad = append(columnsToLoad,%s)", instanceName)
 		pw.deindent()
 		pw.fprintLn("}")
+	} else if 0 != len(this.PrimaryKey) {
+		//The second method that is preferred is using the primary key
+		//The user must set these or the INSERT would fail
+		pw.fprintLn("columnsToLoad = %s", this.TheColumnType.PrimaryKeyColumnsName)
+	} else {
+		//This generates an unconditional return. In other words the rest of the
+		//the method is superfluous. This is done to ensure correctness. It is assumed
+		//that no one actually uses sillyquill to generate code against a database
+		//that has non-identifiable rows
+		pw.fprintLn("return %s.RowNotUniquelyIdentifiableError{Instance:this}",
+			sillyquil_runtime_pkg_name)
 	}
 
 	pw.fprintLn("err := this.insertColumns(db,columnsToLoad,columnsToCreate)")
