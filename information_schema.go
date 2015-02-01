@@ -69,7 +69,7 @@ func (this *InformationSchemaColumn) StringToSqlDataType(v string) (SqlDataType,
 		return SqlFloat64, nil
 	case "DATE":
 		return SqlDate, nil
-	case "NUMERIC": //TODO handle variable precision on type
+	case "NUMERIC":
 		return SqlNumeric, nil
 	case "TIMESTAMP WITHOUT TIME ZONE", "TIMESTAMP":
 		//TIMESTAMP - timestamp without timezone
