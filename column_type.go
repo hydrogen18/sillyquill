@@ -69,8 +69,6 @@ func NewColumnType(that *ColumnizedStruct) *ColumnType {
 
 func (this *ColumnType) Imports() []string {
 	return []string{
-		"fmt",
-		"bytes",
 		"github.com/hydrogen18/sillyquill/rt",
 	}
 }
@@ -185,29 +183,6 @@ func (this *ColumnType) Emit(pw *panicWriter) error {
 	pw.deindent()
 	pw.fprintLn("}")
 	pw.fprintLn("return result")
-	pw.deindent()
-	pw.fprintLn("}")
-
-	//--Emit function to return an and clause representing each column
-	pw.fprintLn("func(this %s) andEqualClauseOf(parameterIndex int) string {",
-		this.ListTypeName,
-	)
-	pw.indent()
-	pw.fprintLn("var buf bytes.Buffer")
-	pw.fprintLn("for i, v := range this {")
-	pw.indent()
-	pw.fprintLn(`fmt.Fprintf(&buf,"%%q",v.Name())`)
-	pw.fprintLn(`(&buf).WriteRune('=')`)
-	pw.fprintLn(`fmt.Fprintf(&buf,"$%%d", i + parameterIndex)`)
-	pw.fprintLn("")
-	pw.fprintLn("if i != len(this) - 1 {")
-	pw.indent()
-	pw.fprintLn(`(&buf).WriteString(" and ")`)
-	pw.deindent()
-	pw.fprintLn("}")
-	pw.deindent()
-	pw.fprintLn("}")
-	pw.fprintLn("return buf.String()")
 	pw.deindent()
 	pw.fprintLn("}")
 

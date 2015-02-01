@@ -30,6 +30,37 @@ func (s *TestSuite) TearDownSuite(c *C) {
 	}
 }
 
+func (s *TestSuite) TestDelete(c *C) {
+	var err error
+	i := new(dal.Truck)
+	i.SetMake("chevy")
+	i.SetModel("silverado")
+	i.SetTonnage(0.5)
+	err = i.Create(s.db)
+	c.Assert(err, IsNil)
+	c.Assert(i.IsLoaded.Id, Equals, true)
+
+	k := new(dal.Truck)
+	k.SetMake("asfaf")
+	k.SetModel("asdfadfdafdaf")
+	k.SetTonnage(125125)
+	err = k.Create(s.db)
+	c.Check(err, IsNil)
+
+	rowId := i.Id
+	err = i.Delete(s.db)
+	c.Assert(err, IsNil)
+
+	j := new(dal.Truck)
+	j.SetId(rowId)
+	err = j.Get(s.db)
+	c.Check(err, NotNil)
+
+	err = k.Reload(s.db)
+	c.Check(err, IsNil)
+
+}
+
 func (s *TestSuite) TestErrOnNonUniquelyIdentifiables(c *C) {
 	var err error
 	pdg := new(dal.PizzaDeliveryGuy)

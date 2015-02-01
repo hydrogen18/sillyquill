@@ -42,3 +42,17 @@ func BuildUpdateQuery(
 	w.Truncate(w.Len() - 1)
 
 }
+
+func BuildAndEqualClause(
+	w *bytes.Buffer,
+	parameterIndex int,
+	columns []string) {
+
+	const and = " and "
+	for i, v := range columns {
+		fmt.Fprintf(w, "%q=$%d", v, i+parameterIndex)
+		w.WriteString(and)
+	}
+	w.Truncate(w.Len() - len(and))
+
+}

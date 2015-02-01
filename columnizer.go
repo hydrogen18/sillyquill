@@ -530,7 +530,6 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 	pw.fprintLn("}")
 
 	//--Emit a FindOrCreate function
-
 	pw.fprintLn("func (this *%s) FindOrCreate(db *sql.DB, columnsToLoad ...%s) error {",
 		this.SingularModelName,
 		this.TheColumnType.InterfaceName,
@@ -582,6 +581,20 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 		this.TheColumnType.ListTypeName) //Clear the flags for columns that are
 	pw.deindent()
 	pw.fprintLn("}")
+	pw.fprintLn("return err")
+	pw.deindent()
+	pw.fprintLn("}")
+
+	//--Emit a delete function
+	pw.fprintLn("func (this *%s) Delete(db *sql.DB) error {", this.SingularModelName)
+	pw.indent()
+	pw.fprintLn("idColumns, err := this.identifyingColumns()")
+	pw.returnIf("err != nil", "err")
+	pw.fprintLn("var buf bytes.Buffer")
+	pw.fprintLn(`(&buf).WriteString("DELETE FROM %s ")`, this.TableName)
+	pw.fprintLn(`(&buf).WriteString(" WHERE ")`)
+	pw.fprintLn(`%s.BuildAndEqualClause(&buf, 1, idColumns.Names())`, sillyquil_runtime_pkg_name)
+	pw.fprintLn(`_, err = db.Exec((&buf).String(),idColumns.ValuesOf(this)...)`)
 	pw.fprintLn("return err")
 	pw.deindent()
 	pw.fprintLn("}")

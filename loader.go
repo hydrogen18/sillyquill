@@ -151,7 +151,9 @@ func (this *ColumnLoader) Emit(pw *panicWriter) error {
 	pw.fprintLn("}")
 	pw.fprintLn("(&buf).Truncate((&buf).Len() - 1)")
 	pw.fprintLn("(&buf).WriteString(` from %q where `)", this.TheColumnizedStruct.TableName)
-	pw.fprintLn("(&buf).WriteString(where.andEqualClauseOf(1))")
+
+	pw.fprintLn(`%s.BuildAndEqualClause(&buf,1,where.Names())`,
+		sillyquil_runtime_pkg_name)
 
 	pw.fprintLn("row := db.QueryRow(buf.String(),where.ValuesOf(this)...)")
 	pw.fprintLn("return this.loadWithColumns(columns,row)")

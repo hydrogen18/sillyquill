@@ -40,7 +40,8 @@ func (this *ColumnSaver) Emit(pw *panicWriter) error {
 		this.TheColumnizedStruct.TableName,
 		this.TheColumnType.ListTypeName)
 	pw.fprintLn(`(&buf).WriteString(" WHERE ")`)
-	pw.fprintLn(`(&buf).WriteString(where.andEqualClauseOf(len(columns)+1))`)
+	pw.fprintLn(`%s.BuildAndEqualClause(&buf,len(columns)+1,where.Names())`,
+		sillyquil_runtime_pkg_name)
 
 	pw.fprintLn("var args []interface{}")
 	pw.fprintLn("args = %s(columns).ValuesOf(this)", this.TheColumnType.ListTypeName)
@@ -98,8 +99,8 @@ func (this *ColumnSaver) Emit(pw *panicWriter) error {
 	pw.fprintLn("(&buf).Truncate(buf.Len()-1)")
 	pw.fprintLn(`(&buf).WriteString(" FROM %s WHERE ")`,
 		this.TheColumnizedStruct.TableName)
-	pw.fprintLn("(&buf).WriteString(where.andEqualClauseOf(1))")
-
+	pw.fprintLn(`%s.BuildAndEqualClause(&buf, 1, where.Names())`,
+		sillyquil_runtime_pkg_name)
 	pw.fprintLn(`(&buf).WriteString("), new_row as ( INSERT INTO %s (")`,
 		this.TheColumnizedStruct.TableName)
 	pw.fprintLn("for _, v := range columnsToSave {")
