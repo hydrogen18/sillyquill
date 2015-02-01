@@ -24,7 +24,7 @@ if proc.wait() != 0:
 
 db_name = 'sillyquill_%d' % random.randint(1,65535) 
 sql = "CREATE DATABASE %s;" % db_name
-proc = subprocess.Popen(['psql','-c',sql,'postgres'])
+proc = subprocess.Popen(['psql','-w','-a','-c',sql,'postgres'])
 if proc.wait() != 0:
     sys.stdout.write("creating database failed\n")
     sys.exit(1) 

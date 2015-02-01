@@ -11,6 +11,7 @@ type Table interface {
 	Columns() ([]Column, error)
 	Unique() ([]string, error)
 	PrimaryKey() ([]string, error)
+	ForeignKeys() ([]string, error)
 }
 
 type SqlDataType int
@@ -145,6 +146,10 @@ func (this *InformationSchemaTable) PrimaryKey() ([]string, error) {
 
 func (this *InformationSchemaTable) Unique() ([]string, error) {
 	return this.columnNamesWhereConstraintType("UNIQUE")
+}
+
+func (this *InformationSchemaTable) ForeignKeys() ([]string, error) {
+	return this.columnNamesWhereConstraintType("FOREIGN KEY")
 }
 
 func (this *InformationSchemaTable) columnNamesWhereConstraintType(constraint_type string) ([]string, error) {

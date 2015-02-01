@@ -1,3 +1,4 @@
+\set ON_ERROR_STOP 1 
 create table trucks (
 	id serial not null unique,
 	created_at timestamp not null,
@@ -31,7 +32,13 @@ create table pizza_delivery_guys (
 	gas_mileage double precision not null,
 	pizzas_delivered int,
 	PRIMARY KEY(name)
-); 
+);
+
+create table wheels (
+	id bigserial not null unique,
+	diameter real not null,
+	car_id  bigint references cars(id)
+ );
 
 create table archive_files (
 	id serial unique,
