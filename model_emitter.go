@@ -184,10 +184,6 @@ func (this *ModelEmitter) Emit(table Table, outputPath string) error {
 			return err
 		}
 	}
-	fks, err := table.ForeignKeys()
-	for _, v := range fks {
-		spicelog.Infof("Table %q Foreign Key %q", table.Name(), v)
-	}
 	return nil
 }
 

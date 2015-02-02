@@ -32,6 +32,14 @@ func main() {
 	}
 	spicelog.Infof("Parsed file %q", *tomlFile)
 
+	if conf.ConnectionMax <= 0 {
+		conf.ConnectionMax = 1
+	}
+
+	if conf.Schema == "" {
+		conf.Schema = "public"
+	}
+
 	db, err := sql.Open("postgres", conf.DB)
 	if err != nil {
 		spicelog.Fatalf("Failed opening database:%v", err)
@@ -48,7 +56,7 @@ func main() {
 		db:          db,
 		TableSchema: conf.Schema,
 	}
-
+	spicelog.Infof("Querying schema %q", conf.Schema)
 	tables, err := adapter.Tables()
 	if err != nil {
 		spicelog.Fatalf("Failed querying for tables:%v", err)
