@@ -6,3 +6,6 @@
 
 ##Configuration file format
 ---
+
+##Type mapping
+---

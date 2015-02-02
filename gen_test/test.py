@@ -63,7 +63,7 @@ if passed:
     db_config = "dbname=%s sslmode=disable" % db_name
     proc_env = dict(os.environ)
     proc_env['DB'] = db_config
-    proc = subprocess.Popen(['go','test','-v'],env=proc_env)  
+    proc = subprocess.Popen(['go','test','-check.vv'],env=proc_env)   
     if proc.wait() != 0:
         sys.stdout.write("go test failed\n")
         passed = False

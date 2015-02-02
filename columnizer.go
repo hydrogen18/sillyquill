@@ -270,42 +270,19 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 
 	pw.fprintLn("")
 	//--Emit a String() for the model type
-	pw.fprintLn("func (this *%s) String() string {", this.SingularModelName)
+	pw.fprintLn("func (this *%s) GoString() string {", this.SingularModelName)
 	pw.indent()
 	pw.fprintLn("var buf bytes.Buffer")
-	pw.fprintLn(`(&buf).WriteString("%s{")`, this.SingularModelName)
-	for _, field := range this.Fields {
-
-		pw.fprintLn("if this.IsLoaded.%s || this.IsSet.%s {",
-			field.Name,
-			field.Name,
-		)
-		pw.indent()
-
-		if field.DataTypeDefn[0] != reflect.Ptr {
-			pw.fprintLn(`fmt.Fprintf(&buf,"%s:%%v, ",this.%s)`,
-				field.Name,
-				field.Name)
-		} else {
-			pw.fprintLn("if this.%s != nil {", field.Name)
-			pw.indent()
-			pw.fprintLn(`fmt.Fprintf(&buf,"%s:%%v, ",*this.%s)`,
-				field.Name,
-				field.Name,
-			)
-			pw.deindent()
-			pw.fprintLn("} else {")
-			pw.indent()
-			pw.fprintLn(`(&buf).WriteString("%s:nil, ")`,
-				field.Name,
-			)
-			pw.deindent()
-			pw.fprintLn("}")
-		}
-
-		pw.deindent()
-		pw.fprintLn("}")
-	}
+	pw.fprintLn(`(&buf).WriteString("%s{ ")`, this.SingularModelName)
+	pw.fprintLn("for _, v := range %s {", this.TheColumnType.AllColumnsName)
+	pw.indent()
+	pw.fprintLn("if v.IsLoaded(this) || v.IsSet(this) {")
+	pw.indent()
+	pw.fprintLn(`fmt.Fprintf(&buf, "%%s:%%v ", v.Name(), v.ValueOf(this))`)
+	pw.deindent()
+	pw.fprintLn("}")
+	pw.deindent()
+	pw.fprintLn("}")
 	pw.fprintLn(`(&buf).WriteRune('}')`)
 	pw.fprintLn("return (&buf).String()")
 	pw.deindent()

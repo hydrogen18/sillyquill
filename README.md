@@ -47,7 +47,7 @@ Run the following commands
 ```
 go get github.com/hydrogen18/sillyquill
 go install github.com/hydrogen18/sillyquill
-$GOPATH/bin/sillyquill ./sillyquill.toml
+$GOPATH/bin/sillyquill #In the directory with sillyquill.toml
 ```
 
 Sillyquill now runs and generates source files in the configured directory.

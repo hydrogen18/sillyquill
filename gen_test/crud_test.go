@@ -30,6 +30,25 @@ func (s *TestSuite) TearDownSuite(c *C) {
 	}
 }
 
+func (s *TestSuite) TestStringer(c *C) {
+	var err error
+	i := new(dal.Truck)
+	i.SetMake("chevy")
+	i.SetModel("silverado")
+	i.SetTonnage(0.5)
+	err = i.FindOrCreate(s.db)
+	c.Assert(err, IsNil)
+	c.Logf("%#v", i)
+
+	j := new(dal.Incident)
+	var reportedBy string
+	reportedBy = "meow"
+	j.SetReportedBy(&reportedBy)
+	err = j.Create(s.db)
+	c.Assert(err, IsNil)
+	c.Logf("%#v", j)
+}
+
 func (s *TestSuite) TestDelete(c *C) {
 	var err error
 	i := new(dal.Truck)
