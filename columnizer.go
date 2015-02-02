@@ -345,29 +345,36 @@ func (this *ColumnizedStruct) Emit(pw *panicWriter) error {
 		pw.indent()
 		//Timestamps are handled as a special case.
 		//Always convert the given values to UTC
-		switch field.SqlType {
-		case SqlTimestamp:
-			if field.Pointer {
-				//Do a juggling act to prevent modifying the
-				//instance of time.Time pointed
-				pw.fprintLn("if v != nil {")
-				pw.indent()
-				pw.fprintLn("utcV := new(time.Time)")
-				pw.fprintLn("*utcV = v.UTC()")
-				pw.fprintLn("v = utcV")
-				pw.deindent()
-				pw.fprintLn("}")
+		pw.fprintLn("this.IsSet.%s = true", field.Name)
+		if field.Pointer {
+			//Copy the value passed in if it is not nil
+			pw.fprintLn("if v == nil {")
+			pw.indent()
+			pw.fprintLn("this.%s = nil", field.Name)
+			pw.fprintLn("return")
+			pw.deindent()
+			pw.fprintLn("}")
+
+			pw.fprintLn("if this.%s == nil {", field.Name)
+			pw.indent()
+			pw.fprintLn("w := *v")
+			pw.fprintLn("this.%s = &w", field.Name)
+			pw.deindent()
+			pw.fprintLn("}")
+			if field.SqlType != SqlTimestamp {
+				pw.fprintLn("*this.%s = *v", field.Name)
+			} else {
+				pw.fprintLn("*this.%s = v.UTC()", field.Name)
+			}
+
+		} else {
+			if field.SqlType != SqlTimestamp {
 				pw.fprintLn("this.%s = v", field.Name)
 			} else {
 				pw.fprintLn("this.%s = v.UTC()", field.Name)
 			}
-
-		default:
-			pw.fprintLn("this.%s = v", field.Name)
-
 		}
 
-		pw.fprintLn("this.IsSet.%s = true", field.Name)
 		pw.deindent()
 		pw.fprintLn("}")
 		pw.fprintLn("")

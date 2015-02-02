@@ -133,14 +133,16 @@ func (s *TestSuite) TestNoOverwritingExistingFields(c *C) {
 
 	j := new(dal.Incident)
 	j.SetId(i.Id)
+	const testWord = "fatality"
 	var notTheResolution string
-	notTheResolution = "fatality"
+	notTheResolution = testWord
 	j.SetResolution(&notTheResolution)
 	err = j.FindOrCreate(s.db)
 	c.Assert(err, IsNil)
 
-	c.Assert(j.IsLoaded.Resolution, Equals, true)
-	c.Assert(*j.Resolution, Equals, *i.Resolution)
+	c.Check(j.IsLoaded.Resolution, Equals, true)
+	c.Check(*j.Resolution, Equals, *i.Resolution)
+	c.Check(notTheResolution, Equals, testWord) //Verify the stack local is not changed
 
 }
 
