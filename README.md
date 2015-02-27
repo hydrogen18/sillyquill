@@ -55,3 +55,4 @@ Sillyquill now runs and generates source files in the configured directory.
 ###TODO
 ---
 Foreign key support
+Schema support
