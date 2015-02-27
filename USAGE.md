@@ -46,3 +46,22 @@ There are other types that have no real answer. The `NUMERIC` type does not map 
 To further complicate matters, PostgreSQL implements types like `HSTORE` and `TSVECTOR`. For now, `TSVECTOR` is simply ignored if encountered.
 
 An important note is that all `TIMESTAMP` columns are assumed to be stored in UTC.
+
+##Interpreting the result of raw SQL queries
+---
+
+In order to not lose the flexibility of the existing `database/sql` package, reading results from raw queries is supported. Here is an example.
+
+```
+rows, err := db.Query("Select id, name from childrens")
+if err != nil {
+	panic(err)
+}
+
+l, err := dal.LoadManyChildrens(rows)
+if err != nil {
+	panic(err)
+}
+```
+
+By supporting this any SQL query can be crafted to fit your use case. The values are matched into the the `struct` by using the `Columns()` method. Due to this it is possible to confuse the software by using the SQL `as` clause when selecting columns.

@@ -31,6 +31,14 @@ err := u.Get(dbconn)
 
 ```
 
+Lookup the same user, but only load the email column.
+```
+u := new(dal.User)
+u.SetName("foobar")
+err := u.Get(dbconn,dal.Users.Email)
+//Check the value of err
+```
+
 
 ##Quick Start
 ---
