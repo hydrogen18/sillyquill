@@ -3,7 +3,7 @@
 
 Sillyquill is a tool for generating Golang code from an exising Postgres database.
 
-The generated code models each row as an instance of a `struct`. The API supports basic CRUD semantics, but can also handle rows from your own SQL queries. The generated code is built on top of the project [github.com/lib/pq][https://github.com/lib/pq].
+The generated code models each row as an instance of a `struct`. The API supports basic CRUD semantics, but can also handle rows from your own SQL queries. The generated code is built on top of the project [github.com/lib/pq](https://github.com/lib/pq).
 
 ##Example usage of generated code
 ---
