@@ -88,11 +88,30 @@ func (this *ColumnLoader) Emit(pw *panicWriter) error {
 
 	pw.fprintLn("args := columns.PointersTo(this)")
 	pw.fprintLn("err := scanner.Scan(args...)")
-	pw.fprintLn("if err != nil { ")
+
+  pw.fprintLn("switch(err){")
+  pw.indent()
+  pw.fprintLn("case nil:")
+  pw.fprintLn("case sql.ErrNoRows:")
+  pw.indent()
+  pw.fprintLn("return %s.RowDoesNotExistError{this};", sillyquil_runtime_pkg_name)
+  pw.deindent()
+
+  pw.fprintLn("default:")
+  pw.indent()
+  pw.fprintLn("return err")
+  pw.deindent()
+
+  pw.deindent()
+  pw.fprintLn("}")
+
+	
+  pw.fprintLn("if err != nil { ")
 	pw.indent()
 	pw.fprintLn("return err")
 	pw.deindent()
 	pw.fprintLn("}")
+
 	pw.fprintLn("columns.SetLoaded(this,true)")
 	pw.fprintLn("return nil")
 	pw.deindent()

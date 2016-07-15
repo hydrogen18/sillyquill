@@ -16,7 +16,7 @@ type RowNotUniquelyIdentifiableError struct {
 }
 
 func (this RowNotUniquelyIdentifiableError) Error() string {
-	return fmt.Sprintf("Instance of type %T not uniquely identifiable:%v",
+	return fmt.Sprintf("Instance of type %T not uniquely identifiable:%#v",
 		this.Instance,
 		this.Instance)
 }
@@ -26,6 +26,6 @@ type RowDoesNotExistError struct {
 }
 
 func (this RowDoesNotExistError) Error() string {
-	return fmt.Sprintf("Instance of type %T does not exist:%v", this.Instance,
+	return fmt.Sprintf("Instance of type %T does not exist:%#v", this.Instance,
 		this.Instance)
 }
