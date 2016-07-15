@@ -29,3 +29,8 @@ func (this RowDoesNotExistError) Error() string {
 	return fmt.Sprintf("Instance of type %T does not exist:%#v", this.Instance,
 		this.Instance)
 }
+
+func IsRowDoesNotExist(err error) bool {
+  _, ok := err.(RowDoesNotExistError)
+  return ok
+}
