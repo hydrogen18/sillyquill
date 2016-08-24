@@ -1,6 +1,6 @@
 package sillyquill_rt
 
-import "code.google.com/p/godec/dec"
+import "github.com/hydrogen18/sillyquill/dec"
 import "fmt"
 import "database/sql/driver"
 
